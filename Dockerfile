@@ -39,7 +39,7 @@ COPY . .
 ARG ENABLE_OTEL=false
 ARG ENABLE_TSNET=false
 ARG ENABLE_REDIS=false
-ARG ENABLE_EMBEDUI=false
+ARG ENABLE_EMBEDUI=true
 ARG VERSION=
 
 # Copy web UI dist — from web-builder when ENABLE_EMBEDUI=true, empty dir otherwise.
