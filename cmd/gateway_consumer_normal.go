@@ -217,6 +217,22 @@ func processNormalMessage(
 
 	runID := fmt.Sprintf("inbound-%s-%s-%s", msg.Channel, msg.ChatID, uuid.NewString()[:8])
 
+	if deps.PostConversation != nil {
+		deps.PostConversation.Schedule(ctx, deps, postConversationReportEvent{
+			AgentKey:         agentID,
+			Channel:          msg.Channel,
+			ChannelType:      resolveChannelType(deps.ChannelMgr, msg.Channel),
+			ChatID:           msg.ChatID,
+			PeerKind:         peerKind,
+			SessionKey:       sessionKey,
+			InboundContent:   msg.Content,
+			Metadata:         msg.Metadata,
+			TenantID:         msg.TenantID,
+			AgentUUID:        agentLoop.UUID(),
+			AgentOtherConfig: agentLoop.OtherConfig(),
+		})
+	}
+
 	// Build outbound metadata for reply-to + thread routing BEFORE RegisterRun
 	// so block.reply handler can use it for routing intermediate messages.
 	outMeta := channels.CopyFinalRoutingMeta(msg.Metadata)

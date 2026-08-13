@@ -44,6 +44,8 @@ func consumeInboundMessages(ctx context.Context, msgBus *bus.MessageBus, agents 
 		v, _ := announceMu.LoadOrStore(key, &sync.Mutex{})
 		return v.(*sync.Mutex)
 	}
+	postConversation := newPostConversationReporter(ctx)
+	defer postConversation.Stop()
 
 	// Construct shared dependencies once — passed by pointer to all handlers.
 	deps := &ConsumerDeps{
@@ -61,6 +63,7 @@ func consumeInboundMessages(ctx context.Context, msgBus *bus.MessageBus, agents 
 		SubagentMgr:      subagentMgr,
 		UsageCaps:        usageCapSvc,
 		ProviderReg:      providerReg,
+		PostConversation: postConversation,
 		GetAnnounceMu:    getAnnounceMu,
 	}
 

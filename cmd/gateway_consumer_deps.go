@@ -32,6 +32,7 @@ type ConsumerDeps struct {
 	SubagentMgr      *tools.SubagentManager
 	UsageCaps        *usagecaps.Service
 	ProviderReg      *providers.Registry
+	PostConversation *postConversationReporter
 	BgWg             sync.WaitGroup
 	GetAnnounceMu    func(string) *sync.Mutex
 }
