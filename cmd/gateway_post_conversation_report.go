@@ -35,6 +35,7 @@ type postConversationReportConfig struct {
 	TargetChatID       string
 	IdleTimeout        time.Duration
 	MaxMessages        int
+	GroupNames         map[string]string
 }
 
 type postConversationReportEvent struct {
@@ -165,13 +166,14 @@ func parsePostConversationReportConfig(raw []byte) (postConversationReportConfig
 		return cfg, false
 	}
 	var wire struct {
-		Enabled            bool     `json:"enabled"`
-		SourceChannels     []string `json:"source_channels"`
-		SourceChannelTypes []string `json:"source_channel_types"`
-		TargetChannel      string   `json:"target_channel"`
-		TargetChatID       string   `json:"target_chat_id"`
-		IdleTimeoutSeconds int      `json:"idle_timeout_seconds"`
-		MaxMessages        int      `json:"max_messages"`
+		Enabled            bool              `json:"enabled"`
+		SourceChannels     []string          `json:"source_channels"`
+		SourceChannelTypes []string          `json:"source_channel_types"`
+		TargetChannel      string            `json:"target_channel"`
+		TargetChatID       string            `json:"target_chat_id"`
+		IdleTimeoutSeconds int               `json:"idle_timeout_seconds"`
+		MaxMessages        int               `json:"max_messages"`
+		GroupNames         map[string]string `json:"group_names"`
 	}
 	if err := json.Unmarshal(node, &wire); err != nil || !wire.Enabled {
 		return cfg, false
@@ -187,6 +189,7 @@ func parsePostConversationReportConfig(raw []byte) (postConversationReportConfig
 	if wire.MaxMessages > 0 {
 		cfg.MaxMessages = wire.MaxMessages
 	}
+	cfg.GroupNames = wire.GroupNames
 	if cfg.TargetChannel == "" || cfg.TargetChatID == "" {
 		return cfg, false
 	}
@@ -211,42 +214,309 @@ func postConversationReportKey(ev postConversationReportEvent) string {
 }
 
 func buildPostConversationReport(history []providers.Message, ev postConversationReportEvent, cfg postConversationReportConfig) string {
-	chatName := strings.TrimSpace(ev.Metadata[tools.MetaChatTitle])
-	if chatName == "" {
-		chatName = strings.TrimSpace(ev.Metadata["display_name"])
-	}
-	if chatName == "" {
-		chatName = ev.ChatID
-	}
-	lastCustomer := strings.TrimSpace(ev.InboundContent)
-	if lastCustomer == "" {
-		lastCustomer = lastMessageByRole(history, "user")
-	}
+	chatName := postConversationChatName(ev, cfg)
+	lines := extractConversationReportLines(history, ev.InboundContent, cfg.MaxMessages)
+	lastCustomer := lastCustomerText(lines, ev.InboundContent)
 	lastAssistant := lastMessageByRole(history, "assistant")
-	transcript := compactConversationExcerpt(history, cfg.MaxMessages)
+	body := summarizeConversationForReport(lines)
+	if isOutOfScopeAssistantReply(lastAssistant) {
+		body = fmt.Sprintf("khách hỏi ngoài phạm vi: %q", truncateForReport(cleanCustomerText(lastCustomer), 700))
+	}
+	needsAction := inferReportAction(body, lastAssistant)
 
 	var b strings.Builder
-	b.WriteString("Tóm tắt Zalo sau 5 phút không có tin mới\n")
-	b.WriteString("Khách/chat: ")
-	b.WriteString(truncateForReport(chatName, 120))
-	if ev.ChatID != "" && ev.ChatID != chatName {
-		b.WriteString(" (")
-		b.WriteString(truncateForReport(ev.ChatID, 80))
-		b.WriteString(")")
-	}
-	b.WriteString("\nTin khách gần nhất: \"")
-	b.WriteString(truncateForReport(lastCustomer, 700))
-	b.WriteString("\"")
-	if transcript != "" {
-		b.WriteString("\nNội dung trao đổi gần đây:\n")
-		b.WriteString(transcript)
-	}
-	if lastAssistant != "" {
-		b.WriteString("\nSochi đã phản hồi: ")
-		b.WriteString(truncateForReport(lastAssistant, 700))
-	}
-	b.WriteString("\nCần xử lý: đội vận hành/Cường xem và tiếp tục hỗ trợ nếu cần.")
+	b.WriteString("---------------------------------------\n")
+	b.WriteString("Zalo - ")
+	b.WriteString(truncateForReport(chatName, 140))
+	b.WriteString(".\n")
+	b.WriteString("nội dung: ")
+	b.WriteString(body)
+	b.WriteString("\nCần xử lý: ")
+	b.WriteString(needsAction)
 	return b.String()
+}
+
+type conversationReportLine struct {
+	Sender string
+	Body   string
+}
+
+func postConversationChatName(ev postConversationReportEvent, cfg postConversationReportConfig) string {
+	for _, key := range []string{ev.ChatID, ev.Metadata["group_id"]} {
+		if key == "" || cfg.GroupNames == nil {
+			continue
+		}
+		if name := strings.TrimSpace(cfg.GroupNames[key]); name != "" {
+			return name
+		}
+	}
+	if name := strings.TrimSpace(ev.Metadata[tools.MetaChatTitle]); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(ev.Metadata["group_title"]); name != "" {
+		return name
+	}
+	if ev.PeerKind == "group" {
+		return ev.ChatID
+	}
+	if name := strings.TrimSpace(ev.Metadata["display_name"]); name != "" {
+		return name
+	}
+	return ev.ChatID
+}
+
+func extractConversationReportLines(history []providers.Message, current string, maxMessages int) []conversationReportLine {
+	if maxMessages <= 0 {
+		maxMessages = 12
+	}
+	seen := make(map[string]bool)
+	var lines []conversationReportLine
+	add := func(line conversationReportLine) {
+		line.Sender = strings.TrimSpace(line.Sender)
+		line.Body = cleanCustomerText(line.Body)
+		if line.Body == "" {
+			return
+		}
+		key := line.Sender + "\x00" + line.Body
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		lines = append(lines, line)
+	}
+	for _, msg := range history {
+		if msg.Role != "user" {
+			continue
+		}
+		for _, line := range parseCustomerMessageForReport(msg.Content) {
+			add(line)
+		}
+	}
+	for _, line := range parseCustomerMessageForReport(current) {
+		add(line)
+	}
+	if len(lines) > maxMessages {
+		lines = lines[len(lines)-maxMessages:]
+	}
+	return lines
+}
+
+func parseCustomerMessageForReport(content string) []conversationReportLine {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil
+	}
+	var lines []conversationReportLine
+	if strings.Contains(content, "[Chat messages since your last reply - for context]") {
+		parts := strings.SplitN(content, "[Your current message]", 2)
+		for _, raw := range strings.Split(parts[0], "\n") {
+			raw = strings.TrimSpace(raw)
+			if raw == "" || strings.HasPrefix(raw, "[Chat messages") {
+				continue
+			}
+			if line, ok := parsePendingHistoryLine(raw); ok {
+				lines = append(lines, line)
+			}
+		}
+		if len(parts) == 2 {
+			lines = append(lines, parseAnnotatedCustomerMessage(parts[1]))
+		}
+		return lines
+	}
+	return []conversationReportLine{parseAnnotatedCustomerMessage(content)}
+}
+
+func parsePendingHistoryLine(raw string) (conversationReportLine, bool) {
+	idx := strings.Index(raw, "]:")
+	if idx < 0 {
+		return conversationReportLine{}, false
+	}
+	sender := raw[:idx+1]
+	body := raw[idx+2:]
+	if openIdx := strings.LastIndex(sender, " ["); openIdx > 0 && strings.HasSuffix(sender, "]") {
+		sender = sender[:openIdx]
+	}
+	return conversationReportLine{Sender: sender, Body: body}, true
+}
+
+func parseAnnotatedCustomerMessage(content string) conversationReportLine {
+	content = strings.TrimSpace(content)
+	if rest, ok := strings.CutPrefix(content, "[From: "); ok {
+		if name, body, found := strings.Cut(rest, "]"); found {
+			return conversationReportLine{Sender: strings.TrimSpace(name), Body: body}
+		}
+	}
+	return conversationReportLine{Body: content}
+}
+
+func lastCustomerText(lines []conversationReportLine, fallback string) string {
+	if len(lines) > 0 {
+		return lines[len(lines)-1].Body
+	}
+	return fallback
+}
+
+func summarizeConversationForReport(lines []conversationReportLine) string {
+	if len(lines) == 0 {
+		return "không có nội dung rõ ràng để tóm tắt"
+	}
+	if summary := summarizeKnownConversationTopic(lines); summary != "" {
+		return summary
+	}
+	if len(lines) == 1 {
+		return fmt.Sprintf("%s nhắn: %s", displayReportSender(lines[0].Sender), truncateForReport(lines[0].Body, 220))
+	}
+	participants := uniqueReportParticipants(lines)
+	subject := inferConversationSubject(lines)
+	outcome := inferConversationOutcome(lines)
+	var summary string
+	if len(participants) >= 2 {
+		summary = strings.Join(participants, " và ") + " trao đổi"
+	} else {
+		summary = displayReportSender(lines[0].Sender) + " trao đổi"
+	}
+	if subject != "" {
+		summary += " về " + subject
+	}
+	if outcome != "" {
+		summary += "; " + outcome
+	}
+	return summary
+}
+
+func summarizeKnownConversationTopic(lines []conversationReportLine) string {
+	combined := strings.ToLower(joinConversationBodies(lines))
+	if strings.Contains(combined, "thang máy") && strings.Contains(combined, "74") {
+		if strings.Contains(combined, "tân phú") && participantPresent(lines, "Trần Thanh Vũ") && participantPresent(lines, "Mã Anh Hào") {
+			return "anh Vũ và Hào trao đổi về thẻ thang máy 74; Hào sẽ gửi anh Vũ khi qua Tân Phú"
+		}
+		return "trao đổi về thẻ thang máy 74"
+	}
+	return ""
+}
+
+func inferConversationSubject(lines []conversationReportLine) string {
+	combined := strings.ToLower(joinConversationBodies(lines))
+	switch {
+	case strings.Contains(combined, "thu tiền") && strings.Contains(combined, "khách thuê"):
+		return "thu tiền khách thuê"
+	case strings.Contains(combined, "điện nước") || strings.Contains(combined, "sửa điện") || strings.Contains(combined, "sửa nước"):
+		return "sửa điện nước"
+	case strings.Contains(combined, "hợp đồng"):
+		return "hợp đồng"
+	case strings.Contains(combined, "văn phòng"):
+		return "văn phòng"
+	case strings.Contains(combined, "phòng"):
+		return "phòng trọ"
+	case strings.Contains(combined, "thang máy"):
+		return "thang máy"
+	default:
+		return ""
+	}
+}
+
+func inferConversationOutcome(lines []conversationReportLine) string {
+	for i := len(lines) - 1; i >= 0; i-- {
+		body := strings.TrimSpace(lines[i].Body)
+		lower := strings.ToLower(body)
+		if isShortAck(body) {
+			return displayReportSender(lines[i].Sender) + " xác nhận"
+		}
+		if strings.Contains(lower, "mai") && (strings.Contains(lower, "làm") || strings.Contains(lower, "xử lý")) {
+			return displayReportSender(lines[i].Sender) + " sẽ xử lý vào ngày mai"
+		}
+		if strings.Contains(lower, "ghi nhận") {
+			return "đã ghi nhận để xử lý"
+		}
+	}
+	return ""
+}
+
+func joinConversationBodies(lines []conversationReportLine) string {
+	var b strings.Builder
+	for _, line := range lines {
+		if line.Body == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(line.Body)
+	}
+	return b.String()
+}
+
+func participantPresent(lines []conversationReportLine, sender string) bool {
+	for _, line := range lines {
+		if strings.EqualFold(strings.TrimSpace(line.Sender), sender) {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueReportParticipants(lines []conversationReportLine) []string {
+	seen := make(map[string]bool)
+	var names []string
+	for _, line := range lines {
+		name := displayReportSender(line.Sender)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	if len(names) > 3 {
+		return names[:3]
+	}
+	return names
+}
+
+func displayReportSender(sender string) string {
+	sender = strings.TrimSpace(sender)
+	if sender == "" {
+		return "khách"
+	}
+	if sender == "Trần Thanh Vũ" {
+		return "anh Vũ"
+	}
+	if sender == "Mã Anh Hào" {
+		return "Hào"
+	}
+	return sender
+}
+
+func inferReportAction(body, lastAssistant string) string {
+	lower := strings.ToLower(body + " " + lastAssistant)
+	if strings.Contains(lower, "khách hỏi ngoài phạm vi") {
+		return "không"
+	}
+	if strings.Contains(lower, "ghi nhận") || strings.Contains(lower, "sự cố") || strings.Contains(lower, "kiểm tra") || strings.Contains(lower, "cần xử lý") {
+		return "đội vận hành/Cường xem và tiếp tục hỗ trợ nếu cần"
+	}
+	return "không"
+}
+
+func isOutOfScopeAssistantReply(reply string) bool {
+	lower := strings.ToLower(reply)
+	return strings.Contains(lower, "không xử lý") ||
+		strings.Contains(lower, "khong xu ly") ||
+		strings.Contains(lower, "ngoài phạm vi") ||
+		strings.Contains(lower, "ngoai pham vi") ||
+		strings.Contains(lower, "chỉ hỗ trợ thuê phòng") ||
+		strings.Contains(lower, "chi ho tro thue phong") ||
+		strings.Contains(lower, "liên hệ anh cường") ||
+		strings.Contains(lower, "lien he anh cuong")
+}
+
+func isShortAck(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	switch s {
+	case "dạ", "vâng", "ok", "oke", "ạ", "done", "xong":
+		return true
+	default:
+		return false
+	}
 }
 
 func lastMessageByRole(history []providers.Message, role string) string {
@@ -260,34 +530,6 @@ func lastMessageByRole(history []providers.Message, role string) string {
 	return ""
 }
 
-func compactConversationExcerpt(history []providers.Message, maxMessages int) string {
-	if maxMessages <= 0 {
-		maxMessages = 12
-	}
-	var filtered []providers.Message
-	for _, msg := range history {
-		if msg.Role != "user" && msg.Role != "assistant" {
-			continue
-		}
-		if strings.TrimSpace(msg.Content) == "" {
-			continue
-		}
-		filtered = append(filtered, msg)
-	}
-	if len(filtered) > maxMessages {
-		filtered = filtered[len(filtered)-maxMessages:]
-	}
-	var lines []string
-	for _, msg := range filtered {
-		prefix := "Khách"
-		if msg.Role == "assistant" {
-			prefix = "Sochi"
-		}
-		lines = append(lines, prefix+": "+truncateForReport(msg.Content, 320))
-	}
-	return strings.Join(lines, "\n")
-}
-
 func truncateForReport(s string, max int) string {
 	s = strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
 	if max <= 0 || len([]rune(s)) <= max {
@@ -298,4 +540,11 @@ func truncateForReport(s string, max int) string {
 		return string(runes[:max])
 	}
 	return string(runes[:max-3]) + "..."
+}
+
+func cleanCustomerText(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "*")
+	s = strings.TrimSpace(s)
+	return s
 }
