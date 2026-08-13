@@ -99,7 +99,7 @@ func TestPostConversationReporterResetsTimerAndSendsLatestQuote(t *testing.T) {
 	if out.Channel != "bao-cao" || out.ChatID != "-5479458662" {
 		t.Fatalf("outbound target = %q/%q, want bao-cao/-5479458662", out.Channel, out.ChatID)
 	}
-	if !strings.Contains(out.Content, `Tin khach gan nhat: "Gia vang hom nay bao nhieu?"`) {
+	if !strings.Contains(out.Content, `Tin khách gần nhất: "Gia vang hom nay bao nhieu?"`) {
 		t.Fatalf("report did not quote latest customer message: %s", out.Content)
 	}
 	if strings.Contains(out.Content, "first message") {

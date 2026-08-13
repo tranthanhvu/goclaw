@@ -226,26 +226,26 @@ func buildPostConversationReport(history []providers.Message, ev postConversatio
 	transcript := compactConversationExcerpt(history, cfg.MaxMessages)
 
 	var b strings.Builder
-	b.WriteString("Tom tat Zalo sau 5 phut khong co tin moi\n")
-	b.WriteString("Khach/chat: ")
+	b.WriteString("Tóm tắt Zalo sau 5 phút không có tin mới\n")
+	b.WriteString("Khách/chat: ")
 	b.WriteString(truncateForReport(chatName, 120))
 	if ev.ChatID != "" && ev.ChatID != chatName {
 		b.WriteString(" (")
 		b.WriteString(truncateForReport(ev.ChatID, 80))
 		b.WriteString(")")
 	}
-	b.WriteString("\nTin khach gan nhat: \"")
+	b.WriteString("\nTin khách gần nhất: \"")
 	b.WriteString(truncateForReport(lastCustomer, 700))
 	b.WriteString("\"")
 	if transcript != "" {
-		b.WriteString("\nNoi dung trao doi gan day:\n")
+		b.WriteString("\nNội dung trao đổi gần đây:\n")
 		b.WriteString(transcript)
 	}
 	if lastAssistant != "" {
-		b.WriteString("\nSochi da phan hoi: ")
+		b.WriteString("\nSochi đã phản hồi: ")
 		b.WriteString(truncateForReport(lastAssistant, 700))
 	}
-	b.WriteString("\nCan xu ly: doi van hanh/Cuong xem va tiep tuc ho tro neu can.")
+	b.WriteString("\nCần xử lý: đội vận hành/Cường xem và tiếp tục hỗ trợ nếu cần.")
 	return b.String()
 }
 
@@ -279,7 +279,7 @@ func compactConversationExcerpt(history []providers.Message, maxMessages int) st
 	}
 	var lines []string
 	for _, msg := range filtered {
-		prefix := "Khach"
+		prefix := "Khách"
 		if msg.Role == "assistant" {
 			prefix = "Sochi"
 		}
