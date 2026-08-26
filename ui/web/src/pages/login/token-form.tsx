@@ -6,6 +6,7 @@ import { AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { tokenFormSchema, type TokenFormData } from "@/schemas/login.schema";
+import { apiUrl } from "@/lib/api-base";
 
 interface TokenFormProps {
   onSubmit: (userId: string, token: string) => void;
@@ -30,7 +31,7 @@ export function TokenForm({ onSubmit }: TokenFormProps) {
     setError(null);
 
     try {
-      const res = await fetch("/v1/agents", {
+      const res = await fetch(apiUrl("/v1/agents"), {
         headers: {
           Authorization: `Bearer ${data.token.trim()}`,
           "X-GoClaw-User-Id": data.userId.trim(),

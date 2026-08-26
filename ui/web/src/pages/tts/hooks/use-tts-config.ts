@@ -6,6 +6,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { toast } from "@/stores/use-toast-store";
 import i18next from "i18next";
 import { userFriendlyError } from "@/lib/error-utils";
+import { apiUrl } from "@/lib/api-base";
 
 export interface TtsProviderConfig {
   api_key?: string;
@@ -86,7 +87,7 @@ export function useTtsConfig() {
     queryKey: queryKeys.tts.all,
     queryFn: async () => {
       // Use per-tenant TTS config endpoint instead of global config.get
-      const res = await fetch("/v1/tts/config", {
+      const res = await fetch(apiUrl("/v1/tts/config"), {
         headers: http.getAuthHeaders(),
       });
       if (!res.ok) {
@@ -110,7 +111,7 @@ export function useTtsConfig() {
       setError(null);
       try {
         // Use per-tenant TTS config endpoint instead of config.patch (master-scope)
-        const res = await fetch("/v1/tts/config", {
+        const res = await fetch(apiUrl("/v1/tts/config"), {
           method: "POST",
           headers: { "Content-Type": "application/json", ...http.getAuthHeaders() },
           body: JSON.stringify(updates),
@@ -137,7 +138,7 @@ export function useTtsConfig() {
   // See: http-client.ts:107-109 — getAuthHeaders() returns Authorization + X-GoClaw-* headers.
   const synthesize = useCallback(
     async (params: SynthesizeParams): Promise<Blob> => {
-      const res = await fetch("/v1/tts/synthesize", {
+      const res = await fetch(apiUrl("/v1/tts/synthesize"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...http.getAuthHeaders() },
         body: JSON.stringify(params),

@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-base";
+
 export interface TreeNode {
   name: string;
   path: string;
@@ -156,13 +158,14 @@ export function formatSize(bytes: number): string {
 
 /** Convert a local file path to a /v1/files/ URL for serving.
  *  Extracts basename so the backend fallback search can find generated files.
- *  Server signs URLs with ?ft= at delivery time — no client-side token needed. */
+ *  Server signs URLs with ?ft= at delivery time — no client-side token needed.
+ *  Prefixes the gateway base when VITE_API_URL is set (separately-hosted SPA). */
 export function toFileUrl(path: string): string {
   if (path.startsWith("/v1/files/") || path.includes("/v1/files/")) {
-    return path;
+    return apiUrl(path);
   }
   const basename = path.split("/").pop() ?? path;
-  return `/v1/files/${basename}`;
+  return apiUrl(`/v1/files/${basename}`);
 }
 
 /** Append ?download=true to a URL for Content-Disposition: attachment. */

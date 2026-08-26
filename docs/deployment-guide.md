@@ -152,6 +152,66 @@ Re-issue manually if needed:
 sudo /usr/local/bin/goclaw-issue-ssl
 ```
 
+## Standalone Web UI On Vercel
+
+The web dashboard (`ui/web`) can be hosted on Vercel as a static SPA, separate from the
+gateway. The gateway stays on the VPS (WebSocket + HTTP API + PostgreSQL cannot run on
+serverless platforms). The SPA talks to the gateway directly — no proxying through Vercel,
+so large media uploads and long-lived WebSocket connections are unaffected.
+
+### Gateway Side
+
+Add the Vercel origin to `gateway.allowed_origins` in the gateway config (JSON5). This one
+list gates both the WebSocket handshake (`checkOrigin`) and HTTP CORS headers:
+
+```json5
+{
+  gateway: {
+    allowed_origins: [
+      "https://<project>.vercel.app",
+      // include any custom domain attached to the Vercel project
+    ],
+  },
+}
+```
+
+Then restart the gateway. Verify CORS from the SPA origin:
+
+```bash
+curl -sI "https://$GOCLAW_DOMAIN/v1/agents" -H "Origin: https://<project>.vercel.app" \
+  | grep -i access-control-allow-origin
+```
+
+### Vercel Side
+
+`ui/web/vercel.json` is committed (Vite framework, `dist` output, SPA fallback rewrite).
+Deploy from the `ui/web` directory:
+
+```bash
+npm i -g vercel
+cd ui/web
+vercel login
+vercel link                    # link or create the project
+vercel env add VITE_API_URL    # https://$GOCLAW_DOMAIN  (no trailing slash)
+vercel env add VITE_WS_URL     # wss://$GOCLAW_DOMAIN/ws
+vercel --prod
+```
+
+| Env var | Example | Purpose |
+|---|---|---|
+| `VITE_API_URL` | `https://gw.example.com` | Base for `/v1` HTTP calls and file/media URLs (empty = same-origin) |
+| `VITE_WS_URL` | `wss://gw.example.com/ws` | WebSocket endpoint (empty = same-origin `/ws`) |
+
+Both are baked in at build time by Vite — set them before `vercel --prod` and re-deploy
+after changing.
+
+### Rollback
+
+```bash
+vercel ls                     # list deployments
+vercel rollback <url>         # or promote a previous one in the dashboard
+```
+
 ## Deploy A New Release
 
 Preferred server-side upgrade flow:

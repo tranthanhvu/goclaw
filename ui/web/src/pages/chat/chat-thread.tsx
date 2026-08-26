@@ -9,6 +9,7 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { ThinkingBlock } from "@/components/chat/thinking-block";
 import { ChatImageGalleryProvider } from "@/components/chat/chat-image-gallery-context";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
+import { apiUrl } from "@/lib/api-base";
 import type { ChatMessage, ToolStreamEntry, RunActivity, ActiveTeamTask } from "@/types/chat";
 import type { LightboxImage } from "@/components/shared/image-lightbox";
 
@@ -114,7 +115,7 @@ export const ChatThread = memo(function ChatThread({
           let src = match[2] ?? "";
           // Resolve relative file paths to API URL
           if (src && !src.startsWith("http") && !src.startsWith("/v1/files/")) {
-            src = `/v1/files/${encodeURIComponent(src)}`;
+            src = apiUrl(`/v1/files/${encodeURIComponent(src)}`);
           }
           if (src) add(src, alt, alt || (src.split("/").pop() ?? "image"));
         }

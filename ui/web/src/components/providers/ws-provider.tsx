@@ -4,6 +4,7 @@ import { HttpClient } from "@/api/http-client";
 import { WsContext } from "@/hooks/use-ws";
 import { useAuthStore } from "@/stores/use-auth-store";
 import { useWsQueryInvalidation } from "@/hooks/use-query-invalidation";
+import { API_BASE } from "@/lib/api-base";
 import { LOCAL_STORAGE_KEYS } from "@/lib/constants";
 import { useWsEvent } from "@/hooks/use-ws-event";
 import { TEAM_RELATED_EVENTS, Methods } from "@/api/protocol";
@@ -96,7 +97,7 @@ export function WsProvider({ children }: { children: React.ReactNode }) {
 
   const http = useMemo(() => {
     const client = new HttpClient(
-      "",
+      API_BASE,
       () => useAuthStore.getState().token,
       () => useAuthStore.getState().userId,
       () => useAuthStore.getState().senderID,

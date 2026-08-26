@@ -350,10 +350,16 @@ func tokenAuthMiddleware(token string, next http.Handler) http.Handler {
 func (s *Server) Start(ctx context.Context) error {
 	mux := s.BuildMux()
 
-	// Wrap with CORS for desktop dev mode (Wails serves frontend on different port).
-	var handler http.Handler = mux
+	// CORS: desktop dev mode gets a permissive wrapper (Wails serves the
+	// frontend on a different port); server mode honors gateway.allowed_origins
+	// so the SPA can be hosted on a separate origin (e.g. Vercel) while the
+	// gateway serves the HTTP API. WebSocket origins are gated by checkOrigin
+	// using the same list.
+	var handler http.Handler
 	if os.Getenv("GOCLAW_DESKTOP") == "1" {
 		handler = desktopCORS(mux)
+	} else {
+		handler = s.corsMiddleware(mux)
 	}
 	// NOTE: The public-URL snapshot is intentionally NOT updated by a global
 	// middleware. An unauthenticated probe with a forged Host header could
@@ -816,6 +822,32 @@ func StartTestServer(s *Server, ctx context.Context) (addr string, start func())
 	}
 
 	return addr, start
+}
+
+// corsMiddleware applies CORS to HTTP routes when gateway.allowed_origins is
+// configured, enabling separately-hosted SPA deployments (e.g. Vercel dashboard
+// talking to this gateway's HTTP API). No-op when the list is empty — the
+// default same-origin deployment needs no CORS headers.
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		allowed := origin != "" && len(s.cfg.Gateway.AllowedOrigins) > 0 && s.checkOrigin(r)
+		if allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			if reqHeaders := r.Header.Get("Access-Control-Request-Headers"); reqHeaders != "" {
+				w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
+			} else {
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-GoClaw-Tenant-Id, X-GoClaw-User-Id")
+			}
+		}
+		if r.Method == http.MethodOptions && allowed {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // desktopCORS wraps a handler with permissive CORS headers for desktop dev mode.

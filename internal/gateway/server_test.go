@@ -216,6 +216,97 @@ func TestCheckOrigin_UnknownOrigin_Rejected(t *testing.T) {
 	}
 }
 
+// ---- corsMiddleware ----
+
+func TestCORSMiddleware_AllowedOrigin_EchoesOrigin(t *testing.T) {
+	s := minimalServer(t)
+	s.cfg.Gateway.AllowedOrigins = []string{"https://app.example.com"}
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	w := httptest.NewRecorder()
+	s.corsMiddleware(next).ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want echoed origin", got)
+	}
+	if w.Header().Get("Access-Control-Allow-Headers") == "" {
+		t.Error("Access-Control-Allow-Headers should be set")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 (non-preflight passes through)", w.Code)
+	}
+}
+
+func TestCORSMiddleware_DisallowedOrigin_NoHeaders(t *testing.T) {
+	s := minimalServer(t)
+	s.cfg.Gateway.AllowedOrigins = []string{"https://app.example.com"}
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents", nil)
+	req.Header.Set("Origin", "https://evil.example.com")
+	w := httptest.NewRecorder()
+	s.corsMiddleware(next).ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty for disallowed origin", got)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 (request still reaches handler)", w.Code)
+	}
+}
+
+func TestCORSMiddleware_Preflight_Returns204WithoutCallingHandler(t *testing.T) {
+	s := minimalServer(t)
+	s.cfg.Gateway.AllowedOrigins = []string{"https://app.example.com"}
+
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodOptions, "/v1/agents", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type")
+	w := httptest.NewRecorder()
+	s.corsMiddleware(next).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204 for allowed preflight", w.Code)
+	}
+	if called {
+		t.Error("preflight should not reach the wrapped handler")
+	}
+	if got := w.Header().Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type" {
+		t.Errorf("Access-Control-Allow-Headers = %q, want echoed request headers", got)
+	}
+}
+
+func TestCORSMiddleware_NoAllowedOriginsConfigured_NoHeaders(t *testing.T) {
+	s := minimalServer(t)
+	s.cfg.Gateway.AllowedOrigins = nil
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents", nil)
+	req.Header.Set("Origin", "https://any.example.com")
+	w := httptest.NewRecorder()
+	s.corsMiddleware(next).ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty when AllowedOrigins unconfigured (same-origin default)", got)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+}
+
 // ---- desktopCORS ----
 
 func TestDesktopCORS_SetsHeaders(t *testing.T) {
