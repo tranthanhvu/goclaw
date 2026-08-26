@@ -203,7 +203,9 @@ vercel --prod
 | `VITE_WS_URL` | `wss://gw.example.com/ws` | WebSocket endpoint (empty = same-origin `/ws`) |
 
 Both are baked in at build time by Vite — set them before `vercel --prod` and re-deploy
-after changing.
+after changing. When `VITE_API_URL` is set, the build also injects the gateway origin into
+the CSP `connect-src` of `index.html` (see `cspGatewayOrigin` in `ui/web/vite.config.ts`),
+so cross-origin `/v1` calls are not blocked by the browser.
 
 ### Rollback
 

@@ -15,9 +15,11 @@
       - font-src self + gstatic — Google Fonts woff2 files.
       - img-src self + data: + blob: — base64 avatars/thumbnails, blob previews.
       - media-src self + blob: — TTS audio playback via blob URLs.
-      - connect-src self + ws:/wss: — websocket to gateway. Same-origin only;
-        if the gateway is hosted on a different domain in production, add the
-        explicit origin here rather than wildcard-allowing all http(s):.
+      - connect-src self + ws:/wss: — websocket to gateway. Same-origin only.
+        When the SPA is built with VITE_API_URL (separately-hosted gateway,
+        e.g. Vercel), the cspGatewayOrigin plugin in vite.config.ts injects
+        the gateway origin into connect-src at build time rather than
+        wildcard-allowing all http(s):.
     -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; base-uri 'self';" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
