@@ -364,5 +364,10 @@ func init() {
 		MsgPackagesUpdatesReasonLocked:             "Cơ sở dữ liệu gói đang bị khóa",
 		MsgPackagesUpdatesReasonDiskFull:           "Đĩa đã đầy",
 		MsgPackagesUpdatesReasonHelperUnavailable:  "Dịch vụ đặc quyền không khả dụng",
+
+		// ATH connector onboarding replies
+		MsgConnectorOnboardingSubmitted: "Yêu cầu đã được gửi Admin ạ.",
+		MsgConnectorOnboardingPending:   "Yêu cầu đang chờ Admin phê duyệt ạ.",
+		MsgConnectorOnboardingApproved:  "Nhóm đã được phê duyệt. Bạn hãy gửi lại câu hỏi ạ.",
 	})
 }

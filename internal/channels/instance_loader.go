@@ -307,6 +307,10 @@ func (l *InstanceLoader) loadInstance(ctx context.Context, inst store.ChannelIns
 	if base, ok := ch.(interface{ SetTenantID(uuid.UUID) }); ok {
 		base.SetTenantID(inst.TenantID)
 	}
+	// Propagate the immutable channel instance identity for trusted provenance.
+	if base, ok := ch.(interface{ SetChannelInstanceID(uuid.UUID) }); ok {
+		base.SetChannelInstanceID(inst.ID)
+	}
 	// Propagate tenant_id to pending history for compaction/sweep DB operations.
 	// Factory creates PendingHistory before SetTenantID is called, so tenantID is uuid.Nil at construction.
 	if ph, ok := ch.(interface{ SetPendingHistoryTenantID(uuid.UUID) }); ok {

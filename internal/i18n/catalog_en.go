@@ -364,5 +364,10 @@ func init() {
 		MsgPackagesUpdatesReasonLocked:             "Package database is locked",
 		MsgPackagesUpdatesReasonDiskFull:           "Disk full",
 		MsgPackagesUpdatesReasonHelperUnavailable:  "Privileged helper unavailable",
+
+		// ATH connector onboarding replies
+		MsgConnectorOnboardingSubmitted: "Your request has been sent to the admin.",
+		MsgConnectorOnboardingPending:   "Your request is awaiting admin approval.",
+		MsgConnectorOnboardingApproved:  "This group is approved. Please send your question again.",
 	})
 }

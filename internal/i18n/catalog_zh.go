@@ -364,5 +364,10 @@ func init() {
 		MsgPackagesUpdatesReasonLocked:             "软件包数据库已锁定",
 		MsgPackagesUpdatesReasonDiskFull:           "磁盘已满",
 		MsgPackagesUpdatesReasonHelperUnavailable:  "特权助手不可用",
+
+		// ATH connector onboarding replies
+		MsgConnectorOnboardingSubmitted: "您的请求已发送给管理员。",
+		MsgConnectorOnboardingPending:   "您的请求正在等待管理员批准。",
+		MsgConnectorOnboardingApproved:  "该群组已获批准，请重新发送您的问题。",
 	})
 }

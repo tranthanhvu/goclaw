@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/channels"
 	"github.com/nextlevelbuilder/goclaw/internal/channels/typing"
@@ -28,11 +29,17 @@ type Channel struct {
 	listener *protocol.Listener
 
 	// Pre-loaded credentials (from DB or from file/QR as fallback).
-	preloadedCreds *protocol.Credentials
+	preloadedCreds  *protocol.Credentials
+	connectorIntake athconnector.GroupIntake // ATH restricted onboarding intake; nil in the generic runtime
 
 	stopCh   chan struct{}
 	stopOnce sync.Once
 }
+
+// SetGroupIntake arms the ATH restricted onboarding intake. Must be called by
+// the isolated connector service assembly before Start; the generic runtime
+// never sets it.
+func (c *Channel) SetGroupIntake(intake athconnector.GroupIntake) { c.connectorIntake = intake }
 
 // New creates a new Zalo Personal channel from config.
 func New(cfg config.ZaloPersonalConfig, msgBus *bus.MessageBus, pairingSvc store.PairingStore, pendingStore store.PendingMessageStore) (*Channel, error) {

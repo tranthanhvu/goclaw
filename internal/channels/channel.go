@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/config"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
@@ -201,16 +202,17 @@ type ReactionChannel interface {
 // BaseChannel provides shared functionality for all channel implementations.
 // Channel implementations should embed this struct.
 type BaseChannel struct {
-	name             string
-	channelType      string // platform type; defaults to name if unset
-	bus              *bus.MessageBus
-	running          bool
-	stateMu          sync.RWMutex
-	health           ChannelHealth
-	allowList        []string
-	agentID          string                  // for DB instances: routes to specific agent (empty = use resolveAgentRoute)
-	tenantID         uuid.UUID               // for DB instances: tenant scope (zero = master tenant fallback)
-	contactCollector *store.ContactCollector // optional: auto-collect contacts from channel messages
+	name              string
+	channelType       string // platform type; defaults to name if unset
+	bus               *bus.MessageBus
+	running           bool
+	stateMu           sync.RWMutex
+	health            ChannelHealth
+	allowList         []string
+	agentID           string                  // for DB instances: routes to specific agent (empty = use resolveAgentRoute)
+	tenantID          uuid.UUID               // for DB instances: tenant scope (zero = master tenant fallback)
+	channelInstanceID uuid.UUID               // for DB instances: immutable channel instance identity (trusted provenance)
+	contactCollector  *store.ContactCollector // optional: auto-collect contacts from channel messages
 
 	// Shared policy + pairing fields (set via setters after construction).
 	pairingService  store.PairingStore
@@ -256,6 +258,14 @@ func (c *BaseChannel) SetAgentID(id string) { c.agentID = id }
 
 // TenantID returns the tenant UUID for this channel (zero = master tenant fallback).
 func (c *BaseChannel) TenantID() uuid.UUID { return c.tenantID }
+
+// ChannelInstanceID returns the immutable channel instance identity injected
+// by the loader; zero for config-defined channels.
+func (c *BaseChannel) ChannelInstanceID() uuid.UUID { return c.channelInstanceID }
+
+// SetChannelInstanceID sets the channel instance identity (used by
+// InstanceLoader for DB instances, before Start).
+func (c *BaseChannel) SetChannelInstanceID(id uuid.UUID) { c.channelInstanceID = id }
 
 // SetTenantID sets the tenant scope (used by InstanceLoader for DB instances).
 func (c *BaseChannel) SetTenantID(id uuid.UUID) { c.tenantID = id }
@@ -619,6 +629,17 @@ func (c *BaseChannel) ValidatePolicy(dmPolicy, groupPolicy string) {
 // This is the standard way for channels to forward received messages.
 // peerKind should be "direct" or "group" (see sessions.PeerDirect, sessions.PeerGroup).
 func (c *BaseChannel) HandleMessage(senderID, chatID, content string, media []string, metadata map[string]string, peerKind string) {
+	c.publishInbound(nil, senderID, chatID, content, media, metadata, peerKind)
+}
+
+// HandleMessageWithOrigin publishes an inbound message carrying the verified
+// ATH trusted origin from the ingress adapter. The origin is the only source
+// of provenance consumers may trust; metadata stays untrusted.
+func (c *BaseChannel) HandleMessageWithOrigin(origin *athconnector.Origin, senderID, chatID, content string, media []string, metadata map[string]string, peerKind string) {
+	c.publishInbound(origin, senderID, chatID, content, media, metadata, peerKind)
+}
+
+func (c *BaseChannel) publishInbound(origin *athconnector.Origin, senderID, chatID, content string, media []string, metadata map[string]string, peerKind string) {
 	// For DMs, enforce the allowlist as a safety net.
 	// For group messages, skip this check — group access is already enforced
 	// by the channel-specific group policy (checkGroupPolicy / CheckPolicy).
@@ -644,16 +665,17 @@ func (c *BaseChannel) HandleMessage(senderID, chatID, content string, media []st
 	}
 
 	msg := bus.InboundMessage{
-		Channel:  c.name,
-		SenderID: senderID,
-		ChatID:   chatID,
-		Content:  content,
-		Media:    mediaFiles,
-		PeerKind: peerKind,
-		UserID:   userID,
-		Metadata: metadata,
-		TenantID: c.tenantID,
-		AgentID:  c.agentID,
+		Channel:       c.name,
+		SenderID:      senderID,
+		ChatID:        chatID,
+		Content:       content,
+		Media:         mediaFiles,
+		PeerKind:      peerKind,
+		UserID:        userID,
+		Metadata:      metadata,
+		TenantID:      c.tenantID,
+		AgentID:       c.agentID,
+		TrustedOrigin: origin,
 	}
 
 	c.bus.PublishInbound(msg)

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	"github.com/nextlevelbuilder/goclaw/internal/channels"
 	"github.com/nextlevelbuilder/goclaw/internal/channels/media"
 	"github.com/nextlevelbuilder/goclaw/internal/channels/typing"
@@ -85,6 +86,14 @@ func (c *Channel) handleGroupMessage(msg protocol.GroupMessage) {
 	if content == "" {
 		return
 	}
+	// Step 0: ATH connector restricted intake. Authentic groups the generic
+	// policy would deny or pair route to the signed onboarding control plane
+	// instead of the generic agent path. Runs after platform authenticity (this
+	// handler is only reached from the verified provider listener) and before
+	// the generic group-policy early-return below.
+	if c.maybeHandleConnectorOnboarding(ctx, senderID, threadID, c.checkBotMentioned(msg.Data.Mentions), msg.Data.MsgID) {
+		return
+	}
 
 	// Step 1: enforce access policy (allowlist/pairing). Hard reject — don't record history.
 	if !c.checkGroupPolicy(ctx, senderID, threadID) {
@@ -149,11 +158,16 @@ func (c *Channel) handleGroupMessage(msg protocol.GroupMessage) {
 
 	metadata := map[string]string{
 		"message_id":   msg.Data.MsgID,
-		"platform":     channels.TypeZaloPersonal,
 		"group_id":     threadID,
 		"display_name": channels.SanitizeDisplayName(senderName),
 	}
-	c.HandleMessage(senderID, threadID, finalContent, allMedia, metadata, "group")
+	var groupOrigin *athconnector.Origin
+	if c.connectorIntakeEnabled() {
+		if origin, err := c.buildGroupOrigin(threadID, senderID, msg.Data.MsgID); err == nil {
+			groupOrigin = origin
+		}
+	}
+	c.HandleMessageWithOrigin(groupOrigin, senderID, threadID, finalContent, allMedia, metadata, "group")
 
 	// Clear pending history after sending to agent (matches Telegram/Discord/Slack/Feishu pattern).
 	c.GroupHistory().Clear(threadID)

@@ -1,6 +1,7 @@
 package athconnector
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -111,3 +112,52 @@ func (o *Origin) ActorID() string { return o.actorID }
 // ProviderMessageID returns the promoted provider event identity used for
 // debounce/dedup, replacing any unverified metadata.message_id value.
 func (o *Origin) ProviderMessageID() string { return o.providerMessageID }
+
+// originWire is the serializable form of Origin. Inbound messages cross the
+// bus boundary as JSON, so the trusted tuple must round-trip losslessly while
+// still refusing forged values on decode.
+type originWire struct {
+	TenantID          uuid.UUID `json:"tenant_id"`
+	ChannelInstanceID uuid.UUID `json:"channel_instance_id"`
+	Provider          string    `json:"provider"`
+	ProviderAccountID string    `json:"provider_account_id"`
+	AccountEpoch      int       `json:"account_epoch"`
+	ConversationKind  string    `json:"conversation_kind"`
+	ConversationID    string    `json:"conversation_id"`
+	ActorID           string    `json:"actor_id"`
+	ProviderMessageID string    `json:"provider_message_id"`
+}
+
+// MarshalJSON serializes the trusted tuple.
+func (o *Origin) MarshalJSON() ([]byte, error) {
+	return json.Marshal(originWire{
+		TenantID:          o.tenantID,
+		ChannelInstanceID: o.channelInstanceID,
+		Provider:          o.provider,
+		ProviderAccountID: o.providerAccountID,
+		AccountEpoch:      o.accountEpoch,
+		ConversationKind:  o.conversationKind,
+		ConversationID:    o.conversationID,
+		ActorID:           o.actorID,
+		ProviderMessageID: o.providerMessageID,
+	})
+}
+
+// UnmarshalJSON rebuilds an Origin through the validating constructor. A wire
+// value naming another provider, or missing any required identity, fails the
+// whole decode: unknown provenance never propagates past the bus boundary.
+func (o *Origin) UnmarshalJSON(data []byte) error {
+	var w originWire
+	if err := json.Unmarshal(data, &w); err != nil {
+		return err
+	}
+	if w.Provider != ProviderZaloPersonal {
+		return fmt.Errorf("athconnector: refusing origin with unsupported provider %q", w.Provider)
+	}
+	origin, err := NewZaloPersonalOrigin(w.TenantID, w.ChannelInstanceID, w.ProviderAccountID, w.AccountEpoch, w.ConversationKind, w.ConversationID, w.ActorID, w.ProviderMessageID)
+	if err != nil {
+		return err
+	}
+	*o = *origin
+	return nil
+}
