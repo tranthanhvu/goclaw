@@ -325,7 +325,7 @@ func (s *SQLiteAgentStore) ListUserInstances(ctx context.Context, agentID uuid.U
 	if subTenantFilter != "" {
 		queryArgs = append(queryArgs, tArgs[0]) // subquery: tenant_id = ?
 	}
-	queryArgs = append(queryArgs, agentID) // main WHERE: p.agent_id = ?
+	queryArgs = append(queryArgs, agentID)  // main WHERE: p.agent_id = ?
 	queryArgs = append(queryArgs, tArgs...) // scope clause args
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.user_id,

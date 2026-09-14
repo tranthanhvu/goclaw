@@ -12,7 +12,7 @@ type VaultDocument struct {
 	AgentID      *string        `json:"agent_id,omitempty" db:"agent_id"`
 	TeamID       *string        `json:"team_id,omitempty" db:"team_id"`
 	ChatID       *string        `json:"chat_id,omitempty" db:"chat_id"` // nil = team-wide (shared / legacy); non-nil = scoped to specific chat in isolated teams
-	Scope        string         `json:"scope" db:"scope"` // personal, team, shared
+	Scope        string         `json:"scope" db:"scope"`               // personal, team, shared
 	CustomScope  *string        `json:"custom_scope,omitempty" db:"custom_scope"`
 	Path         string         `json:"path" db:"path"`                             // workspace-relative path
 	PathBasename string         `json:"path_basename,omitempty" db:"path_basename"` // lowercased basename (PG GENERATED, SQLite app-populated)
@@ -30,8 +30,8 @@ type VaultLink struct {
 	ID        string         `json:"id" db:"id"`
 	FromDocID string         `json:"from_doc_id" db:"from_doc_id"`
 	ToDocID   string         `json:"to_doc_id" db:"to_doc_id"`
-	LinkType  string         `json:"link_type" db:"link_type"` // wikilink, reference, task_attachment, delegation_attachment, ...
-	Context   string         `json:"context" db:"context"`     // surrounding text snippet or source reference
+	LinkType  string         `json:"link_type" db:"link_type"`         // wikilink, reference, task_attachment, delegation_attachment, ...
+	Context   string         `json:"context" db:"context"`             // surrounding text snippet or source reference
 	Metadata  map[string]any `json:"metadata,omitempty" db:"metadata"` // {"source": "task:{id}"} etc., used by cleanup paths
 	CreatedAt time.Time      `json:"created_at" db:"created_at"`
 }
@@ -54,17 +54,17 @@ type VaultSearchResult struct {
 
 // VaultSearchOptions configures a vault search query.
 type VaultSearchOptions struct {
-	Query      string
-	AgentID    string
-	TenantID   string
-	TeamID     *string  // nil = no filter, ptr-to-empty = personal (NULL team_id), ptr-to-uuid = specific team
-	TeamIDs    []string // non-nil = personal (NULL) + these team UUIDs (used for "all accessible" view)
-	ChatID     *string  // isolated-team scope: when non-nil + TeamIsolated, filter (chat_id = ChatID OR chat_id IS NULL)
-	TeamIsolated bool   // true = apply ChatID filter; false = shared/no-team mode (ignore ChatID)
-	Scope      string   // empty = all scopes
-	DocTypes   []string // empty = all types
-	MaxResults int      // default 10
-	MinScore   float64  // default 0.0
+	Query        string
+	AgentID      string
+	TenantID     string
+	TeamID       *string  // nil = no filter, ptr-to-empty = personal (NULL team_id), ptr-to-uuid = specific team
+	TeamIDs      []string // non-nil = personal (NULL) + these team UUIDs (used for "all accessible" view)
+	ChatID       *string  // isolated-team scope: when non-nil + TeamIsolated, filter (chat_id = ChatID OR chat_id IS NULL)
+	TeamIsolated bool     // true = apply ChatID filter; false = shared/no-team mode (ignore ChatID)
+	Scope        string   // empty = all scopes
+	DocTypes     []string // empty = all types
+	MaxResults   int      // default 10
+	MinScore     float64  // default 0.0
 }
 
 // VaultListOptions configures a list query for vault documents.
@@ -93,7 +93,7 @@ type VaultTreeEntry struct {
 // VaultTreeOptions configures a vault tree listing query.
 type VaultTreeOptions struct {
 	Path     string
-	AgentID  string   // optional agent filter
+	AgentID  string // optional agent filter
 	TeamID   *string
 	TeamIDs  []string
 	Scope    string

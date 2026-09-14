@@ -45,8 +45,8 @@ type Workstation struct {
 	BackendType    WorkstationBackend `json:"backendType"`
 	// Metadata holds backend-specific config (SSH or Docker). Plaintext after decrypt.
 	// json:"-" prevents SSH keys/passwords from appearing in API responses.
-	Metadata   []byte    `json:"-"`
-	DefaultCWD string    `json:"defaultCwd"`
+	Metadata   []byte `json:"-"`
+	DefaultCWD string `json:"defaultCwd"`
 	// DefaultEnv holds a JSON map of env overrides. Plaintext after decrypt.
 	// json:"-" prevents env secrets from appearing in API responses.
 	DefaultEnv []byte    `json:"-"`
@@ -109,13 +109,13 @@ type AgentWorkstationLink struct {
 // KnownHostsFingerprint is the SHA256 fingerprint of the host's public key (base64).
 // If empty on first connect, TOFU (Trust On First Use) accepts and logs the fingerprint.
 type SSHMetadata struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	User     string `json:"user"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	User string `json:"user"`
 	// PrivateKey holds inline PEM-encoded private key material (decrypted by store layer).
 	PrivateKey string `json:"privateKey,omitempty"`
 	// Password is optional; prefer key-based auth.
-	Password              string `json:"password,omitempty"`
+	Password string `json:"password,omitempty"`
 	// KnownHostsFingerprint is the expected SHA256 fingerprint (e.g. "SHA256:abc...").
 	// Empty → TOFU on first connect; subsequent calls must match.
 	KnownHostsFingerprint string `json:"knownHostsFingerprint,omitempty"`
@@ -125,9 +125,9 @@ type SSHMetadata struct {
 
 // DockerMetadata contains Docker-specific connection parameters.
 type DockerMetadata struct {
-	Host      string `json:"host"`
-	Image     string `json:"image"`
-	Network   string `json:"network,omitempty"`
+	Host       string `json:"host"`
+	Image      string `json:"image"`
+	Network    string `json:"network,omitempty"`
 	SocketPath string `json:"socketPath,omitempty"`
 }
 

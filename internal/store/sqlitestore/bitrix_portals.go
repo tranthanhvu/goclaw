@@ -127,10 +127,10 @@ func parseBitrixTime(s string) time.Time {
 // so we read as strings and parse into uuid.UUID / time.Time.
 func (s *SQLiteBitrixPortalStore) scanRow(row *sql.Row, name string) (*store.BitrixPortalData, error) {
 	var (
-		idStr, tidStr          string
+		idStr, tidStr              string
 		createdAtStr, updatedAtStr string
-		p                      store.BitrixPortalData
-		creds, state           []byte
+		p                          store.BitrixPortalData
+		creds, state               []byte
 	)
 	err := row.Scan(&idStr, &tidStr, &p.Name, &p.Domain, &creds, &state, &createdAtStr, &updatedAtStr)
 	if err != nil {

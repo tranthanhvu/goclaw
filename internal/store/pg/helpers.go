@@ -15,13 +15,13 @@ import (
 // --- Nullable helpers (delegated to base/) ---
 
 var (
-	nilStr    = base.NilStr
-	nilInt    = base.NilInt
-	nilUUID   = base.NilUUID
-	nilTime   = base.NilTime
-	derefStr  = base.DerefStr
-	derefInt  = base.DerefInt
-	derefUUID = base.DerefUUID
+	nilStr     = base.NilStr
+	nilInt     = base.NilInt
+	nilUUID    = base.NilUUID
+	nilTime    = base.NilTime
+	derefStr   = base.DerefStr
+	derefInt   = base.DerefInt
+	derefUUID  = base.DerefUUID
 	derefBytes = base.DerefBytes
 )
 
@@ -179,4 +179,3 @@ func scopeClauseAlias(ctx context.Context, startParam int, alias string) (clause
 	clause, args, nextParam = base.BuildScopeClauseAlias(pgDialect, bScope, startParam, alias)
 	return clause, args, nextParam, nil
 }
-

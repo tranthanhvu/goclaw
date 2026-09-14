@@ -127,4 +127,3 @@ func requireTenantID(ctx context.Context) (uuid.UUID, error) {
 	}
 	return tid, nil
 }
-

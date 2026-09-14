@@ -144,16 +144,16 @@ type EvolutionSuggestionExport struct {
 }
 
 type ExportPreview struct {
-	ContextFiles       int `json:"context_files" db:"context_files"`
-	UserContextFiles   int `json:"user_context_files_users" db:"user_context_files_users"`
-	MemoryGlobal       int `json:"memory_global" db:"memory_global"`
-	MemoryPerUser      int `json:"memory_per_user" db:"memory_per_user"`
-	KGEntities         int `json:"kg_entities" db:"kg_entities"`
-	KGRelations        int `json:"kg_relations" db:"kg_relations"`
-	CronJobs           int `json:"cron_jobs" db:"cron_jobs"`
-	UserProfiles       int `json:"user_profiles" db:"user_profiles"`
-	UserOverrides      int `json:"user_overrides" db:"user_overrides"`
-	EpisodicSummaries  int `json:"episodic_summaries" db:"episodic_summaries"`
+	ContextFiles      int `json:"context_files" db:"context_files"`
+	UserContextFiles  int `json:"user_context_files_users" db:"user_context_files_users"`
+	MemoryGlobal      int `json:"memory_global" db:"memory_global"`
+	MemoryPerUser     int `json:"memory_per_user" db:"memory_per_user"`
+	KGEntities        int `json:"kg_entities" db:"kg_entities"`
+	KGRelations       int `json:"kg_relations" db:"kg_relations"`
+	CronJobs          int `json:"cron_jobs" db:"cron_jobs"`
+	UserProfiles      int `json:"user_profiles" db:"user_profiles"`
+	UserOverrides     int `json:"user_overrides" db:"user_overrides"`
+	EpisodicSummaries int `json:"episodic_summaries" db:"episodic_summaries"`
 	// Evolution section (Stage 1 + Stage 2 self-evolution)
 	EvolutionMetrics     int `json:"evolution_metrics" db:"evolution_metrics"`
 	EvolutionSuggestions int `json:"evolution_suggestions" db:"evolution_suggestions"`
@@ -754,4 +754,3 @@ func ExportVaultLinks(ctx context.Context, db *sql.DB, agentID uuid.UUID) ([]Vau
 	}
 	return result, rows.Err()
 }
-

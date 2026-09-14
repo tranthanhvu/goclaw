@@ -10,7 +10,7 @@ import (
 // ComputeAttachmentBaseName derives the canonical basename used for both
 // team_task_attachments.base_name and vault_documents.path_basename on SQLite.
 //
-// PG GENERATES these columns via `lower(regexp_replace(path, '.+/', ''))`.
+// PG GENERATES these columns via `lower(regexp_replace(path, '.+/', ”))`.
 // modernc.org/sqlite (bundled) ships no regexp_replace, so SQLite callers
 // must compute the value app-side at INSERT/UPDATE time. This helper is the
 // single source of truth — call it from workspace_interceptor, team_tasks_create,

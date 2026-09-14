@@ -205,4 +205,3 @@ func (s *SQLiteTracingStore) BatchUpdateTraceAggregates(ctx context.Context, tra
 		traceID, traceID, traceID, traceID, traceID, traceID, traceID, traceID)
 	return err
 }
-

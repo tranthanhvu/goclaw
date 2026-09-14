@@ -2278,3 +2278,22 @@ CREATE TABLE IF NOT EXISTS skill_versions (
     UNIQUE(skill_id, version)
 );
 CREATE INDEX IF NOT EXISTS idx_skill_versions_tenant_skill ON skill_versions(tenant_id, skill_id, version DESC);
+
+-- ============================================================
+-- Table: ath_channel_accounts
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ath_channel_accounts (
+    id                  TEXT NOT NULL PRIMARY KEY,
+    tenant_id           TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    channel_instance_id TEXT NOT NULL REFERENCES channel_instances(id) ON DELETE CASCADE,
+    provider            VARCHAR(40) NOT NULL,
+    provider_account_id VARCHAR(300) NOT NULL,
+    account_epoch       INTEGER NOT NULL DEFAULT 1 CHECK (account_epoch >= 1),
+    created_at          TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at          TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE (tenant_id, channel_instance_id, provider)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ath_channel_accounts_tenant ON ath_channel_accounts(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_ath_channel_accounts_instance ON ath_channel_accounts(channel_instance_id);

@@ -25,7 +25,7 @@ func NewPGEpisodicStore(db *sql.DB) *PGEpisodicStore {
 }
 
 func (s *PGEpisodicStore) SetEmbeddingProvider(p store.EmbeddingProvider) { s.embProvider = p }
-func (s *PGEpisodicStore) Close() error                                  { return nil }
+func (s *PGEpisodicStore) Close() error                                   { return nil }
 
 // Create inserts a new episodic summary with optional embedding.
 func (s *PGEpisodicStore) Create(ctx context.Context, ep *store.EpisodicSummary) error {

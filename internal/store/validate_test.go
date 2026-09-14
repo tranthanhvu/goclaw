@@ -40,10 +40,10 @@ func TestValidateUserID_SecurityEdgeCases(t *testing.T) {
 		{"sql_like_but_valid", "'; DROP TABLE users;--", false},
 
 		// Unicode edge cases - format characters should be rejected
-		{"unicode_zwj", "user\u200Dname", true},   // zero-width joiner
-		{"unicode_rtl", "user\u202Ename", true},   // RTL override
-		{"unicode_bom", "\uFEFFuser", true},       // BOM at start
-		{"unicode_zwnj", "user\u200Cname", true},  // zero-width non-joiner
+		{"unicode_zwj", "user\u200Dname", true},  // zero-width joiner
+		{"unicode_rtl", "user\u202Ename", true},  // RTL override
+		{"unicode_bom", "\uFEFFuser", true},      // BOM at start
+		{"unicode_zwnj", "user\u200Cname", true}, // zero-width non-joiner
 
 		// Null bytes - always reject
 		{"null_byte_middle", "user\x00name", true},

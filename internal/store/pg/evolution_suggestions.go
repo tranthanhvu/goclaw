@@ -127,4 +127,3 @@ func (s *PGEvolutionSuggestionStore) GetSuggestion(ctx context.Context, id uuid.
 	}
 	return &sg, nil
 }
-

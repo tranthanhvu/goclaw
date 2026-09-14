@@ -15,6 +15,7 @@ type Stores struct {
 	Tracing               TracingStore
 	RunTimeline           RunTimelineStore
 	MCP                   MCPServerStore
+	ATHAccounts           ATHAccountStore
 	ChannelInstances      ChannelInstanceStore
 	ConfigSecrets         ConfigSecretsStore
 	AgentLinks            AgentLinkStore

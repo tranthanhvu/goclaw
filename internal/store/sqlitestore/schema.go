@@ -16,7 +16,7 @@ var schemaSQL string
 
 // SchemaVersion is the current SQLite schema version.
 // Bump this when adding new migration steps below.
-const SchemaVersion = 49
+const SchemaVersion = 50
 
 // migrations maps version → SQL to apply when upgrading FROM that version.
 // schema.sql always represents the LATEST full schema (for fresh DBs).
@@ -852,7 +852,24 @@ CREATE INDEX IF NOT EXISTS idx_skill_user_grants_tenant ON skill_user_grants(ten
 	47: addSkillSelfEvolutionTables,
 	// Version 48 → 49: append-only usage event analytics.
 	48: addUsageEventAnalyticsTables,
+	// Version 49 → 50: stable ATH channel account registry with account epochs.
+	49: addATHChannelAccountsTables,
 }
+
+const addATHChannelAccountsTables = `
+CREATE TABLE IF NOT EXISTS ath_channel_accounts (
+    id                  TEXT NOT NULL PRIMARY KEY,
+    tenant_id           TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    channel_instance_id TEXT NOT NULL REFERENCES channel_instances(id) ON DELETE CASCADE,
+    provider            VARCHAR(40) NOT NULL,
+    provider_account_id VARCHAR(300) NOT NULL,
+    account_epoch       INTEGER NOT NULL DEFAULT 1 CHECK (account_epoch >= 1),
+    created_at          TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at          TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE (tenant_id, channel_instance_id, provider)
+);
+CREATE INDEX IF NOT EXISTS idx_ath_channel_accounts_tenant ON ath_channel_accounts(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_ath_channel_accounts_instance ON ath_channel_accounts(channel_instance_id);`
 
 const addUsageEventAnalyticsTables = `
 CREATE TABLE IF NOT EXISTS usage_events (

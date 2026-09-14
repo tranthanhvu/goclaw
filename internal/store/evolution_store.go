@@ -39,7 +39,7 @@ type ToolAggregate struct {
 // RetrievalAggregate summarizes per-source retrieval metrics.
 type RetrievalAggregate struct {
 	Source     string  `json:"source"`
-	QueryCount int    `json:"query_count"`
+	QueryCount int     `json:"query_count"`
 	UsageRate  float64 `json:"usage_rate"` // fraction of results used in reply
 	AvgScore   float64 `json:"avg_score"`
 }

@@ -174,4 +174,3 @@ func sqliteAppendGraphTeamFilter(q string, args []any, tableAlias string, teamID
 	}
 	return q, args
 }
-

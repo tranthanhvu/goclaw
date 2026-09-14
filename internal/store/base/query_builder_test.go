@@ -11,9 +11,9 @@ import (
 // testDialectPG is a minimal PG dialect for testing.
 type testDialectPG struct{}
 
-func (testDialectPG) Placeholder(n int) string   { return "$" + itoa(n) }
-func (testDialectPG) TransformValue(v any) any    { return v }
-func (testDialectPG) SupportsReturning() bool     { return true }
+func (testDialectPG) Placeholder(n int) string { return "$" + itoa(n) }
+func (testDialectPG) TransformValue(v any) any { return v }
+func (testDialectPG) SupportsReturning() bool  { return true }
 
 // testDialectSQLite is a minimal SQLite dialect for testing.
 type testDialectSQLite struct{}

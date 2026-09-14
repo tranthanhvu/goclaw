@@ -231,4 +231,3 @@ func (s *SQLiteProviderStore) convertAndDecryptProviders(rows []providerRow) []s
 	}
 	return result
 }
-

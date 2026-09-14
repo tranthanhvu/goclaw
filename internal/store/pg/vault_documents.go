@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -842,4 +842,3 @@ func extractFolderNames(prefix string, deepPaths []string) []string {
 	sort.Strings(folders)
 	return folders
 }
-

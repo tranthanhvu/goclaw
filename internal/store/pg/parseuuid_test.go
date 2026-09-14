@@ -69,4 +69,3 @@ func TestParseUUID_ErrorIsUnwrappable(t *testing.T) {
 		t.Error("parseUUID error should wrap the underlying uuid.Parse error")
 	}
 }
-

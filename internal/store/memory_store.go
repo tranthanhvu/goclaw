@@ -26,7 +26,7 @@ type MemorySearchResult struct {
 type MemorySearchOptions struct {
 	MaxResults   int
 	MinScore     float64
-	Source       string  // "memory", "sessions", ""
+	Source       string // "memory", "sessions", ""
 	PathPrefix   string
 	VectorWeight float64 // per-agent override (0 = use store default)
 	TextWeight   float64 // per-agent override (0 = use store default)

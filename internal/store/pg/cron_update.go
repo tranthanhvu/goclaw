@@ -181,7 +181,6 @@ func (s *PGCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx, id
 	return &state, nil
 }
 
-
 func execCronJobUpdateTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
@@ -219,4 +218,3 @@ func execCronJobUpdateTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, updates 
 	}
 	return nil
 }
-

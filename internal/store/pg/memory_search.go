@@ -273,4 +273,3 @@ func hybridMerge(fts, vec []scoredChunk, textWeight, vectorWeight float64, curre
 
 	return results
 }
-

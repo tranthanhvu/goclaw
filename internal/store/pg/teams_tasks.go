@@ -219,7 +219,7 @@ func (s *PGTeamStore) ListTasks(ctx context.Context, teamID uuid.UUID, orderBy s
 		statusWhere = "AND t.status = 'in_review'"
 	case store.TeamTaskFilterCompleted:
 		statusWhere = "AND t.status IN ('completed','cancelled')"
-	// "", store.TeamTaskFilterAll ("all") → no filter (all statuses)
+		// "", store.TeamTaskFilterAll ("all") → no filter (all statuses)
 	}
 
 	if limit <= 0 {

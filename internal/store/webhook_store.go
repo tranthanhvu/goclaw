@@ -28,8 +28,8 @@ type WebhookData struct {
 	Name            string     `json:"name" db:"name"`
 	Kind            string     `json:"kind" db:"kind"` // "llm" | "message"
 	SecretPrefix    string     `json:"secret_prefix" db:"secret_prefix"`
-	SecretHash      string     `json:"-" db:"secret_hash"`        // SHA-256 hex; bearer-token lookup only; never serialized
-	EncryptedSecret string     `json:"-" db:"encrypted_secret"`   // AES-256-GCM of raw secret; never serialized
+	SecretHash      string     `json:"-" db:"secret_hash"`      // SHA-256 hex; bearer-token lookup only; never serialized
+	EncryptedSecret string     `json:"-" db:"encrypted_secret"` // AES-256-GCM of raw secret; never serialized
 	Scopes          []string   `json:"scopes" db:"scopes"`
 	ChannelID       *uuid.UUID `json:"channel_id,omitempty" db:"channel_id"`
 	RateLimitPerMin int        `json:"rate_limit_per_min" db:"rate_limit_per_min"`
@@ -61,7 +61,7 @@ type WebhookCallData struct {
 	CallbackURL    *string    `json:"callback_url,omitempty" db:"callback_url"`
 	Attempts       int        `json:"attempts" db:"attempts"`
 	NextAttemptAt  *time.Time `json:"next_attempt_at,omitempty" db:"next_attempt_at"`
-	StartedAt      *time.Time `json:"started_at,omitempty" db:"started_at"` // set on ClaimNext
+	StartedAt      *time.Time `json:"started_at,omitempty" db:"started_at"`   // set on ClaimNext
 	LeaseToken     *string    `json:"lease_token,omitempty" db:"lease_token"` // CAS guard; set by ClaimNext, cleared by ReclaimStale
 	RequestPayload []byte     `json:"request_payload,omitempty" db:"request_payload"`
 	Response       []byte     `json:"response,omitempty" db:"response"`

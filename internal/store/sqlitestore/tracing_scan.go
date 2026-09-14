@@ -61,10 +61,10 @@ func scanTraceRows(rows *sql.Rows) ([]store.TraceData, error) {
 		d.StartTime = startTime.Time
 		d.CreatedAt = createdAt.Time
 		var endTimePtr *time.Time
-	if endTime.Valid {
-		endTimePtr = &endTime.Time
-	}
-	applyTraceNullables(&d, parentTraceID, agentID, teamID, userID, sessionKey, runID, name, channel, inputPreview, outputPreview, errStr, endTimePtr, durationMS, metadata, tags)
+		if endTime.Valid {
+			endTimePtr = &endTime.Time
+		}
+		applyTraceNullables(&d, parentTraceID, agentID, teamID, userID, sessionKey, runID, name, channel, inputPreview, outputPreview, errStr, endTimePtr, durationMS, metadata, tags)
 		result = append(result, d)
 	}
 	return result, rows.Err()

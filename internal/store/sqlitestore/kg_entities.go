@@ -363,4 +363,3 @@ func scanEntityTemporalRows(rows *sql.Rows) ([]store.Entity, error) {
 	}
 	return result, rows.Err()
 }
-

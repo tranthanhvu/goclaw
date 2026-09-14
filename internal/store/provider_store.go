@@ -27,9 +27,9 @@ const (
 	ProviderYesScale        = "yescale"
 	ProviderZai             = "zai"
 	ProviderZaiCoding       = "zai_coding"
-	ProviderOllama          = "ollama"       // local or self-hosted Ollama (no API key)
-	ProviderOllamaCloud     = "ollama_cloud" // Ollama Cloud (Bearer token required)
-	ProviderACP             = "acp"          // ACP (Agent Client Protocol) agent subprocess
+	ProviderOllama          = "ollama"          // local or self-hosted Ollama (no API key)
+	ProviderOllamaCloud     = "ollama_cloud"    // Ollama Cloud (Bearer token required)
+	ProviderACP             = "acp"             // ACP (Agent Client Protocol) agent subprocess
 	ProviderNovita          = "novita"          // Novita AI (OpenAI-compatible endpoint)
 	ProviderBytePlus        = "byteplus"        // BytePlus ModelArk (Seed 2.0 models)
 	ProviderBytePlusCoding  = "byteplus_coding" // BytePlus ModelArk Coding Plan
@@ -48,8 +48,8 @@ const (
 	// Kimi Coding defaults. The upstream requires a fixed User-Agent on every
 	// request — handled by the runtime in cmd/gateway_providers.go via
 	// OpenAIProvider.WithExtraHeaders.
-	KimiCodingDefaultAPIBase   = "https://api.kimi.com/coding/v1"
-	KimiCodingDefaultModel     = "kimi-k2-turbo-preview"
+	KimiCodingDefaultAPIBase    = "https://api.kimi.com/coding/v1"
+	KimiCodingDefaultModel      = "kimi-k2-turbo-preview"
 	KimiCodingRequiredUserAgent = "claude-code/0.1.0"
 )
 

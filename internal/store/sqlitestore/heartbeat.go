@@ -337,4 +337,3 @@ func (s *SQLiteHeartbeatStore) ListDeliveryTargets(ctx context.Context, tenantID
 	}
 	return targets, nil
 }
-

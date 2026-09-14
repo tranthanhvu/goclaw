@@ -112,4 +112,3 @@ func (s *PGKnowledgeGraphStore) SupersedeEntity(ctx context.Context, old *store.
 
 	return tx.Commit()
 }
-

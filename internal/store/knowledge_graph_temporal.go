@@ -16,7 +16,7 @@ type KGConfig struct {
 	DedupAutoThreshold float64 `json:"kg_dedup_auto_threshold"` // default 0.98
 	DedupFlagThreshold float64 `json:"kg_dedup_flag_threshold"` // default 0.90
 	ExtractionMinConf  float64 `json:"kg_extraction_min_conf"`  // default 0.75
-	EnableTemporal     bool    `json:"kg_enable_temporal"`       // default true
+	EnableTemporal     bool    `json:"kg_enable_temporal"`      // default true
 }
 
 // DefaultKGConfig returns sensible defaults matching current hardcoded values.

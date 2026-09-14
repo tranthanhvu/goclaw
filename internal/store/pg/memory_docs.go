@@ -18,7 +18,7 @@ import (
 type PGMemoryStore struct {
 	db       *sql.DB
 	provider store.EmbeddingProvider
-	mu       sync.RWMutex   // protects cfg from concurrent read/write
+	mu       sync.RWMutex // protects cfg from concurrent read/write
 	cfg      PGMemoryConfig
 }
 
