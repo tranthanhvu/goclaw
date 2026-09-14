@@ -373,6 +373,9 @@ const (
 	MsgGitCredHostScopeInvalid         = "error.git_cred_host_scope_invalid"         // "host_scope %q is not a valid hostname"
 	MsgGitCredBlobMissingField         = "error.git_cred_blob_missing_field"         // "blob missing required field %q"
 	MsgGitCredUnsupportedCredType      = "error.git_cred_unsupported_cred_type"      // "credential_type %q is not supported"
+	MsgConnectorRegistrationForbidden  = "error.connector_registration_forbidden"    // "ATH connector registration requires operator or admin role"
+	MsgConnectorRegistrationInvalid    = "error.connector_registration_invalid"      // "invalid ATH connector registration: %s"
+
 	// ATH connector onboarding replies (zalo personal restricted intake).
 	MsgConnectorOnboardingSubmitted = "connector.onboarding.submitted" // "Your request has been sent to the admin."
 	MsgConnectorOnboardingPending   = "connector.onboarding.pending"   // "Your request is awaiting admin approval."

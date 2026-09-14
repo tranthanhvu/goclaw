@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/i18n"
 	"github.com/nextlevelbuilder/goclaw/internal/mcp"
@@ -122,6 +123,7 @@ func (h *MCPHandler) handleListServers(w http.ResponseWriter, r *http.Request) {
 	counts, _ := h.store.CountAgentGrantsByServer(r.Context())
 	result := make([]mcpServerWithCounts, len(servers))
 	for i, srv := range servers {
+		srv.Settings = athconnector.RedactSettings(srv.Settings)
 		result[i] = mcpServerWithCounts{MCPServerData: srv, AgentCount: counts[srv.ID]}
 	}
 
@@ -163,6 +165,16 @@ func (h *MCPHandler) handleCreateServer(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if athconnector.IsConnectorSettings(srv.Settings) {
+		if !h.requireConnectorRole(w, r) {
+			return
+		}
+		if _, err := athconnector.ParseRegistration(srv.Settings); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgConnectorRegistrationInvalid, err.Error())})
+			return
+		}
+	}
+
 	userID := store.UserIDFromContext(r.Context())
 	if userID != "" {
 		srv.CreatedBy = userID
@@ -176,7 +188,21 @@ func (h *MCPHandler) handleCreateServer(w http.ResponseWriter, r *http.Request) 
 
 	h.emitCacheInvalidate()
 	emitAudit(h.msgBus, r, "mcp_server.created", "mcp_server", srv.ID.String())
-	writeJSON(w, http.StatusCreated, srv)
+	created := srv
+	created.Settings = athconnector.RedactSettings(srv.Settings)
+	writeJSON(w, http.StatusCreated, created)
+}
+
+// requireConnectorRole enforces the operator/admin-only trust decision for ATH
+// connector registrations; the tenant scope comes from the request context.
+func (h *MCPHandler) requireConnectorRole(w http.ResponseWriter, r *http.Request) bool {
+	role := permissions.Role(store.RoleFromContext(r.Context()))
+	if !permissions.HasMinRole(role, permissions.RoleOperator) {
+		locale := store.LocaleFromContext(r.Context())
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": i18n.T(locale, i18n.MsgConnectorRegistrationForbidden)})
+		return false
+	}
+	return true
 }
 
 func (h *MCPHandler) handleGetServer(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +219,7 @@ func (h *MCPHandler) handleGetServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	srv.Settings = athconnector.RedactSettings(srv.Settings)
 	writeJSON(w, http.StatusOK, srv)
 }
 
@@ -214,6 +241,22 @@ func (h *MCPHandler) handleUpdateServer(w http.ResponseWriter, r *http.Request) 
 		if s, _ := name.(string); !isValidSlug(s) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgInvalidSlug, "name")})
 			return
+		}
+	}
+	if rawSettings, ok := updates["settings"]; ok {
+		encoded, err := json.Marshal(rawSettings)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgInvalidJSON)})
+			return
+		}
+		if athconnector.IsConnectorSettings(encoded) {
+			if !h.requireConnectorRole(w, r) {
+				return
+			}
+			if _, err := athconnector.ParseRegistration(encoded); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgConnectorRegistrationInvalid, err.Error())})
+				return
+			}
 		}
 	}
 

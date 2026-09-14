@@ -7,12 +7,12 @@ import (
 // TestT_ValidLocaleAndKey tests basic message retrieval with valid locale and key.
 func TestT_ValidLocaleAndKey(t *testing.T) {
 	tests := []struct {
-		name     string
-		locale   string
-		key      string
-		args     []any
-		wantMsg  string
-		wantKey  bool // if true, expects key to be returned (not found)
+		name    string
+		locale  string
+		key     string
+		args    []any
+		wantMsg string
+		wantKey bool // if true, expects key to be returned (not found)
 	}{
 		{
 			name:    "English - simple message without args",

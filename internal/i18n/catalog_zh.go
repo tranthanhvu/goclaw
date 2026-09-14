@@ -369,5 +369,9 @@ func init() {
 		MsgConnectorOnboardingSubmitted: "您的请求已发送给管理员。",
 		MsgConnectorOnboardingPending:   "您的请求正在等待管理员批准。",
 		MsgConnectorOnboardingApproved:  "该群组已获批准，请重新发送您的问题。",
+
+		// ATH connector registration guards
+		MsgConnectorRegistrationForbidden: "ATH connector registration requires operator or admin role",
+		MsgConnectorRegistrationInvalid:   "ATH 连接器注册无效：%s",
 	})
 }

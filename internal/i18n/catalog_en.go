@@ -369,5 +369,9 @@ func init() {
 		MsgConnectorOnboardingSubmitted: "Your request has been sent to the admin.",
 		MsgConnectorOnboardingPending:   "Your request is awaiting admin approval.",
 		MsgConnectorOnboardingApproved:  "This group is approved. Please send your question again.",
+
+		// ATH connector registration guards
+		MsgConnectorRegistrationForbidden: "ATH connector registration requires operator or admin role",
+		MsgConnectorRegistrationInvalid:   "invalid ATH connector registration: %s",
 	})
 }

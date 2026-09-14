@@ -369,5 +369,9 @@ func init() {
 		MsgConnectorOnboardingSubmitted: "Yêu cầu đã được gửi Admin ạ.",
 		MsgConnectorOnboardingPending:   "Yêu cầu đang chờ Admin phê duyệt ạ.",
 		MsgConnectorOnboardingApproved:  "Nhóm đã được phê duyệt. Bạn hãy gửi lại câu hỏi ạ.",
+
+		// ATH connector registration guards
+		MsgConnectorRegistrationForbidden: "ATH connector registration requires operator or admin role",
+		MsgConnectorRegistrationInvalid:   "đăng ký ATH connector không hợp lệ: %s",
 	})
 }
