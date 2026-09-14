@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log/slog"
@@ -28,16 +29,17 @@ type MCPPoolEvictor interface {
 
 // MCPHandler handles MCP server management HTTP endpoints.
 type MCPHandler struct {
-	store       store.MCPServerStore
-	msgBus      *bus.MessageBus
-	mgr         MCPToolLister  // optional, nil when Manager not available
-	poolEvictor MCPPoolEvictor // optional, nil when pool not available
-	db          *sql.DB        // for export/import direct queries
+	store         store.MCPServerStore
+	msgBus        *bus.MessageBus
+	mgr           MCPToolLister  // optional, nil when Manager not available
+	poolEvictor   MCPPoolEvictor // optional, nil when pool not available
+	db            *sql.DB        // for export/import direct queries
+	discoverTools func(context.Context, string, string, []string, map[string]string, string, map[string]string) ([]mcp.ToolInfo, error)
 }
 
 // NewMCPHandler creates a handler for MCP server management endpoints.
 func NewMCPHandler(s store.MCPServerStore, msgBus *bus.MessageBus, mgr MCPToolLister) *MCPHandler {
-	return &MCPHandler{store: s, msgBus: msgBus, mgr: mgr}
+	return &MCPHandler{store: s, msgBus: msgBus, mgr: mgr, discoverTools: mcp.DiscoverTools}
 }
 
 // SetPoolEvictor sets the pool evictor for credential rotation handling.

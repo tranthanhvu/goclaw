@@ -230,6 +230,27 @@ When `GOCLAW_*_API_KEY` environment variables are set, the gateway auto-onboards
 
 ## Updating
 
+### Trusted private MCP servers
+
+`GOCLAW_MCP_ALLOWED_HOSTS` is an admin-only trust decision, not a general SSRF
+bypass. It accepts comma-separated hostnames/IPs (no scheme, port, path, wildcard,
+or CIDR). Only explicitly trusted MCP destinations should be listed. Matching is
+case-insensitive and applies to the URL hostname, across all ports on that host.
+Private/loopback destinations can be allowed; cloud metadata, link-local,
+multicast, and unspecified addresses remain blocked during URL validation. This
+registration policy does not add runtime DNS pinning or redirect filtering to the
+MCP client; trusted host DNS and network egress remain operator responsibilities.
+Other fetch/webhook SSRF
+policies are unchanged. MCP bearer credentials and tool/data permissions are
+still required. Never let an agent or chat input configure this list.
+
+For local ATH at `http://host.docker.internal:3310/mcp`, set
+`GOCLAW_MCP_ALLOWED_HOSTS=host.docker.internal` in the untracked `.env` file.
+Both the gateway binary and committed Compose configuration default to no
+exceptions. Set an explicit trusted list separately for each environment.
+Recreate only the GoClaw service after changing its environment. Test connection
+and create/save apply the same URL policy. Do not reset PostgreSQL or volumes.
+
 ### Docker
 ```bash
 docker compose pull && docker compose up -d
