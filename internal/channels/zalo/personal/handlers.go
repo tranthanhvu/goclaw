@@ -158,6 +158,7 @@ func (c *Channel) handleGroupMessage(msg protocol.GroupMessage) {
 
 	metadata := map[string]string{
 		"message_id":   msg.Data.MsgID,
+		"platform":     channels.TypeZaloPersonal,
 		"group_id":     threadID,
 		"display_name": channels.SanitizeDisplayName(senderName),
 	}

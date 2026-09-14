@@ -21,6 +21,13 @@ func (c *Channel) connectorIntakeEnabled() bool {
 	return c.connectorIntake != nil && c.connectorIntake.Enabled()
 }
 
+// onboardingDebounce bounds how often one denied group can trigger the
+// onboarding path (submission + reply), mirroring pairingDebounce.
+const onboardingDebounce = 60 * time.Second
+
+// onboardingSubmitTimeout bounds the detached control-plane submission.
+const onboardingSubmitTimeout = 15 * time.Second
+
 // buildGroupOrigin freezes the trusted source tuple for one authentic group
 // message: tenant and channel instance identity from the loader, the
 // authenticated account and epoch from the registered binding, and the
@@ -52,6 +59,10 @@ func (c *Channel) buildGroupOrigin(threadID, senderID, providerMessageID string)
 // was consumed by the onboarding path. Unknown provenance or a failed
 // submission is dropped without a confirmation reply: the sender may safely
 // retry, and the gateway dedups by event key.
+//
+// Submission and reply run on a bounded goroutine so a slow or unavailable ATH
+// control plane never stalls the sequential zalo listen loop (head-of-line
+// blocking for DMs and allowed groups).
 func (c *Channel) maybeHandleConnectorOnboarding(ctx context.Context, senderID, threadID string, mentioned bool, providerMessageID string) bool {
 	if !c.connectorIntakeEnabled() {
 		return false
@@ -67,12 +78,30 @@ func (c *Channel) maybeHandleConnectorOnboarding(ctx context.Context, senderID, 
 		slog.Warn("zalo_personal connector origin unavailable; dropping event", "group_id", threadID, "error", err)
 		return true
 	}
-	result, err := c.connectorIntake.Submit(ctx, origin, athconnector.OnboardingEventKey(providerMessageID))
-	if err != nil || result == nil {
-		slog.Warn("zalo_personal connector submission not confirmed; no confirmation sent", "group_id", threadID, "error", err)
+	// Debounce per conversation, mirroring the generic pairing reply: each
+	// mention in a denied group otherwise forces a control-plane request and a
+	// bot reply at will; the server caps submission growth, the debounce caps
+	// noise and load. Mark synchronously so bursts collapse before the first
+	// detached submission completes.
+	if !c.CanSendPairingNotif("group:"+threadID, onboardingDebounce) {
 		return true
 	}
-	c.sendOnboardingReply(threadID, result)
+	c.MarkPairingNotifSent("group:" + threadID)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Warn("zalo_personal connector onboarding panicked", "group_id", threadID, "panic", r)
+			}
+		}()
+		submitCtx, cancel := context.WithTimeout(ctx, onboardingSubmitTimeout)
+		defer cancel()
+		result, err := c.connectorIntake.Submit(submitCtx, origin, athconnector.OnboardingEventKey(providerMessageID))
+		if err != nil || result == nil {
+			slog.Warn("zalo_personal connector submission not confirmed; no confirmation sent", "group_id", threadID, "error", err)
+			return
+		}
+		c.sendOnboardingReply(threadID, result)
+	}()
 	return true
 }
 

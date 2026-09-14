@@ -2,7 +2,9 @@ package personal
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -16,10 +18,37 @@ type fakeIntake struct {
 	armed     bool
 	account   string
 	epoch     int
+	mu        sync.Mutex
 	submitted []*athconnector.Origin
 	eventKeys []string
 	result    *athconnector.ApprovalRequestResult
 	err       error
+}
+
+func (f *fakeIntake) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.submitted)
+}
+
+func (f *fakeIntake) submission(i int) *athconnector.Origin {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.submitted[i]
+}
+
+// waitForSubmissions polls until the detached onboarding goroutine recorded n
+// submissions; the submission runs off the listen loop.
+func waitForSubmissions(t *testing.T, f *fakeIntake, n int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if f.count() >= n {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("expected %d submissions, got %d", n, f.count())
 }
 
 func (f *fakeIntake) Enabled() bool { return f.armed }
@@ -29,8 +58,10 @@ func (f *fakeIntake) ProviderAccountID() string { return f.account }
 func (f *fakeIntake) AccountEpoch() int { return f.epoch }
 
 func (f *fakeIntake) Submit(_ context.Context, origin *athconnector.Origin, eventKey string) (*athconnector.ApprovalRequestResult, error) {
+	f.mu.Lock()
 	f.submitted = append(f.submitted, origin)
 	f.eventKeys = append(f.eventKeys, eventKey)
+	f.mu.Unlock()
 	return f.result, f.err
 }
 
@@ -60,16 +91,14 @@ func TestConnectorIntakeConsumesDeniedUnknownGroupOnceMentioned(t *testing.T) {
 	if !ch.maybeHandleConnectorOnboarding(ctx, "sender-1", "group-404", false, "msg-1") {
 		t.Fatal("unmentioned message in a denied group must be consumed silently, not fall through to the generic path")
 	}
-	if len(intake.submitted) != 0 {
+	if intake.count() != 0 {
 		t.Fatal("no submission before the mention trigger")
 	}
 	if !ch.maybeHandleConnectorOnboarding(ctx, "sender-1", "group-404", true, "msg-1") {
 		t.Fatal("mentioned denied group must be consumed by the restricted intake")
 	}
-	if len(intake.submitted) != 1 {
-		t.Fatalf("expected exactly one submission, got %d", len(intake.submitted))
-	}
-	origin := intake.submitted[0]
+	waitForSubmissions(t, intake, 1)
+	origin := intake.submission(0)
 	if origin.TenantID() != ch.TenantID() || origin.ChannelInstanceID() != instanceID {
 		t.Fatal("origin not bound to loader identity")
 	}
@@ -97,7 +126,7 @@ func TestConnectorIntakeLeavesAllowedGroupsOnGenericPath(t *testing.T) {
 	if ch.maybeHandleConnectorOnboarding(context.Background(), "sender-1", "group-1", true, "msg-1") {
 		t.Fatal("policy-allowed group must continue on the generic path")
 	}
-	if len(intake.submitted) != 0 {
+	if intake.count() != 0 {
 		t.Fatal("allowed group must never reach the restricted intake")
 	}
 }
@@ -112,7 +141,7 @@ func TestConnectorIntakeFailsClosedWithoutVerifiedAccount(t *testing.T) {
 	if !ch.maybeHandleConnectorOnboarding(context.Background(), "sender-1", "group-404", true, "msg-1") {
 		t.Fatal("denied group must still be consumed (never fall through to the generic path)")
 	}
-	if len(intake.submitted) != 0 {
+	if intake.count() != 0 {
 		t.Fatal("event without provable provenance must never be submitted")
 	}
 
@@ -120,5 +149,28 @@ func TestConnectorIntakeFailsClosedWithoutVerifiedAccount(t *testing.T) {
 	unarmed.SetChannelInstanceID(uuid.New())
 	if unarmed.maybeHandleConnectorOnboarding(context.Background(), "sender-1", "group-404", true, "msg-1") {
 		t.Fatal("unarmed connector must leave the decision to the generic policy")
+	}
+}
+
+func TestConnectorIntakeDebouncesRepeatedTriggers(t *testing.T) {
+	ch := newIntakeTestChannel(t)
+	ch.SetChannelInstanceID(uuid.New())
+	ch.SetTenantID(uuid.New())
+	intake := &fakeIntake{armed: true, account: "account-1", epoch: 1}
+	ch.SetGroupIntake(intake)
+	ch.mu.Lock()
+	ch.sess = &protocol.Session{UID: "account-1"}
+	ch.mu.Unlock()
+
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		if !ch.maybeHandleConnectorOnboarding(ctx, "sender-1", "group-404", true, "msg-debounce") {
+			t.Fatal("denied group must be consumed")
+		}
+	}
+	waitForSubmissions(t, intake, 1)
+	time.Sleep(50 * time.Millisecond)
+	if intake.count() != 1 {
+		t.Fatalf("debounce must collapse bursts, got %d submissions", intake.count())
 	}
 }
