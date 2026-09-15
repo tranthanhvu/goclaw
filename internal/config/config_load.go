@@ -324,6 +324,10 @@ func (c *Config) applyEnvOverrides() {
 		c.Gateway.MCPAllowedHosts = hosts
 	}
 
+	// Connector-role runtime: only the isolated connector service sets this;
+	// the generic gateway never runs with signing capability armed.
+	envStr("GOCLAW_RUNTIME_ROLE", &c.Gateway.RuntimeRole)
+
 	// Tailscale (tsnet)
 	envStr("GOCLAW_TSNET_HOSTNAME", &c.Tailscale.Hostname)
 	envStr("GOCLAW_TSNET_AUTH_KEY", &c.Tailscale.AuthKey)

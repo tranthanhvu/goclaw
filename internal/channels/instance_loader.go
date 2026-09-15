@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/config"
 	"github.com/nextlevelbuilder/goclaw/internal/providerresolve"
@@ -45,6 +46,7 @@ type InstanceLoader struct {
 	manager           *Manager
 	msgBus            *bus.MessageBus
 	pairingSvc        store.PairingStore
+	connectorFactory  func(inst store.ChannelInstanceData) (*athconnector.Harness, error)
 	mu                sync.Mutex
 	loaded            map[string]struct{} // channel names managed by this loader
 }
@@ -66,6 +68,13 @@ func NewInstanceLoader(
 		pairingSvc: pairingSvc,
 		loaded:     make(map[string]struct{}),
 	}
+}
+
+// SetConnectorHarnessFactory installs the connector enablement factory. It is
+// set only by the isolated connector-role runtime; the generic runtime leaves
+// it nil so no channel ever carries signing capability.
+func (l *InstanceLoader) SetConnectorHarnessFactory(factory func(inst store.ChannelInstanceData) (*athconnector.Harness, error)) {
+	l.connectorFactory = factory
 }
 
 // SetProviderRegistry sets the provider registry for pending message compaction.
@@ -310,6 +319,17 @@ func (l *InstanceLoader) loadInstance(ctx context.Context, inst store.ChannelIns
 	// Propagate the immutable channel instance identity for trusted provenance.
 	if base, ok := ch.(interface{ SetChannelInstanceID(uuid.UUID) }); ok {
 		base.SetChannelInstanceID(inst.ID)
+	}
+	// Connector-role runtimes may arm the ATH restricted intake for this
+	// instance; a factory failure fails closed (no signing capability attached).
+	if l.connectorFactory != nil {
+		if harness, err := l.connectorFactory(inst); err != nil {
+			slog.Warn("channel connector harness unavailable; intake stays unarmed", "name", inst.Name, "error", err)
+		} else if harness != nil {
+			if base, ok := ch.(interface{ SetConnectorHarness(*athconnector.Harness) }); ok {
+				base.SetConnectorHarness(harness)
+			}
+		}
 	}
 	// Propagate tenant_id to pending history for compaction/sweep DB operations.
 	// Factory creates PendingHistory before SetTenantID is called, so tenantID is uuid.Nil at construction.

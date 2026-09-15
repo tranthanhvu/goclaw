@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	"github.com/nextlevelbuilder/goclaw/internal/bgalert"
 	"github.com/nextlevelbuilder/goclaw/internal/bootstrap"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
@@ -543,6 +544,12 @@ func runGateway() {
 		instanceLoader.RegisterFactory(channels.TypeWhatsApp, whatsapp.FactoryWithDBAudio(pgStores.DB, pgStores.PendingMessages, "pgx", audioMgr, pgStores.BuiltinTools))
 		instanceLoader.RegisterFactory(channels.TypeSlack, slackchannel.FactoryWithPendingStore(pgStores.PendingMessages))
 		instanceLoader.RegisterFactory(channels.TypeFacebook, facebook.Factory)
+		// Connector-role runtimes arm the ATH restricted intake from the
+		// operator-registered MCP entry; the generic gateway stays unarmed.
+		if cfg.Gateway.RuntimeRole == string(athconnector.RuntimeRoleConnector) && pgStores.MCP != nil && pgStores.ATHAccounts != nil {
+			instanceLoader.SetConnectorHarnessFactory(channels.ConnectorHarnessFactoryFor(pgStores.MCP, pgStores.ATHAccounts))
+			slog.Info("gateway connector role armed", "runtime_role", cfg.Gateway.RuntimeRole)
+		}
 		instanceLoader.RegisterFactory(channels.TypePancake, pancake.Factory)
 		// Bitrix24: factory needs the portal store + encKey injected so each
 		// Channel can resolve its portal on Start(). The encKey here mirrors
