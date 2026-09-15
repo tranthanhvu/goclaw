@@ -72,7 +72,35 @@
     "toolHintsPerTool": "针对单个工具的提示",
     "toolHintsToolNamePlaceholder": "工具名称（例如 search）",
     "toolHintsToolValuePlaceholder": "发送给 LLM 的提示内容",
-    "toolHintsAdd": "添加提示"
+    "toolHintsAdd": "添加提示",
+    "connector": {
+      "enable": "为频道实例注册 ATH 连接器",
+      "gatewayUrl": "ATH 网关源（精确 HTTPS origin）",
+      "connectorId": "连接器 ID（UUID）",
+      "environment": "环境",
+      "issuer": "签发者",
+      "keyId": "签名密钥 ID",
+      "privateKeyFile": "签名私钥文件（受保护的挂载路径）",
+      "privateKeyUnchanged": "保持不变",
+      "privateKeyHint": "只写：API 永不返回；编辑时留空以保留已存储的路径。",
+      "channelInstanceId": "拥有的频道实例（UUID）",
+      "purpose": "入驻用途",
+      "purposes": {
+        "tenantContract": "租户 — 合同问题",
+        "salesInventory": "销售 — 库存问题",
+        "managementAccess": "管理 — 运营权限"
+      },
+      "trustHint": "仅限 operator/admin。受限入驻通道只在 connector 角色运行时中启用。",
+      "errors": {
+        "gatewayUrl": "必须填写网关 origin",
+        "connectorId": "必须填写连接器 ID",
+        "environment": "必须填写环境",
+        "issuer": "必须填写签发者",
+        "keyId": "必须填写密钥 ID",
+        "channelInstanceId": "必须填写频道实例",
+        "privateKeyFile": "新注册必须填写私钥文件"
+      }
+    }
   },
   "grants": {
     "title": "Agent授权 - {{name}}",

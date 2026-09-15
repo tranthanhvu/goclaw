@@ -72,7 +72,35 @@
     "toolHintsPerTool": "Gợi ý theo tool cụ thể",
     "toolHintsToolNamePlaceholder": "Tên tool (vd: search)",
     "toolHintsToolValuePlaceholder": "Nội dung gợi ý sẽ gửi cho LLM",
-    "toolHintsAdd": "Thêm gợi ý"
+    "toolHintsAdd": "Thêm gợi ý",
+    "connector": {
+      "enable": "Đăng ký ATH connector cho một channel instance",
+      "gatewayUrl": "Origin của ATH gateway (HTTPS origin chính xác)",
+      "connectorId": "Connector ID (UUID)",
+      "environment": "Môi trường",
+      "issuer": "Issuer",
+      "keyId": "ID khóa ký",
+      "privateKeyFile": "File khóa riêng của signer (đường dẫn mount bảo vệ)",
+      "privateKeyUnchanged": "không đổi",
+      "privateKeyHint": "Chỉ ghi: API không bao giờ trả về; để trống khi sửa để giữ giá trị đã lưu.",
+      "channelInstanceId": "Channel instance sở hữu (UUID)",
+      "purpose": "Mục đích onboarding",
+      "purposes": {
+        "tenantContract": "Tenant — câu hỏi hợp đồng",
+        "salesInventory": "Sales — câu hỏi tồn kho",
+        "managementAccess": "Management — quyền vận hành"
+      },
+      "trustHint": "Chỉ operator/admin. Restricted onboarding intake của channel sở hữu chỉ kích hoạt trong runtime vai trò connector.",
+      "errors": {
+        "gatewayUrl": "Bắt buộc nhập gateway origin",
+        "connectorId": "Bắt buộc nhập Connector ID",
+        "environment": "Bắt buộc nhập môi trường",
+        "issuer": "Bắt buộc nhập issuer",
+        "keyId": "Bắt buộc nhập ID khóa",
+        "channelInstanceId": "Bắt buộc nhập channel instance",
+        "privateKeyFile": "Đăng ký mới bắt buộc nhập file khóa riêng"
+      }
+    }
   },
   "grants": {
     "title": "Quyền agent - {{name}}",

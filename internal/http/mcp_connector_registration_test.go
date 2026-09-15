@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	"github.com/nextlevelbuilder/goclaw/internal/security"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
@@ -20,6 +22,7 @@ type connectorRegistrationStore struct {
 	store.MCPServerStore
 	created []*store.MCPServerData
 	got     *store.MCPServerData
+	updates []map[string]any
 }
 
 func (s *connectorRegistrationStore) CreateServer(_ context.Context, server *store.MCPServerData) error {
@@ -29,6 +32,11 @@ func (s *connectorRegistrationStore) CreateServer(_ context.Context, server *sto
 
 func (s *connectorRegistrationStore) GetServer(_ context.Context, _ uuid.UUID) (*store.MCPServerData, error) {
 	return s.got, nil
+}
+
+func (s *connectorRegistrationStore) UpdateServer(_ context.Context, _ uuid.UUID, updates map[string]any) error {
+	s.updates = append(s.updates, updates)
+	return nil
 }
 
 func validConnectorSettings() string {
@@ -104,5 +112,37 @@ func TestConnectorSettingsAreRedactedOnRead(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "ath-connector") {
 		t.Fatalf("redaction must keep the non-secret registration fields: %s", rec.Body.String())
+	}
+}
+
+func TestConnectorUpdateWithoutSecretKeepsStoredReference(t *testing.T) {
+	full := json.RawMessage(validConnectorSettings())
+	st := &connectorRegistrationStore{got: &store.MCPServerData{Settings: full}}
+	h := NewMCPHandler(st, nil, nil)
+
+	var redacted map[string]any
+	if err := json.Unmarshal(athconnector.RedactSettings(full), &redacted); err != nil {
+		t.Fatal(err)
+	}
+	delete(redacted, "private_key_file") // the UI round-trips exactly what the API returned
+	body, err := json.Marshal(map[string]any{"settings": redacted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.New()
+	req := httptest.NewRequest(http.MethodPut, "/v1/mcp/servers/"+id.String(), bytes.NewReader(body))
+	req.SetPathValue("id", id.String())
+	req = req.WithContext(store.WithRole(req.Context(), "admin"))
+	rec := httptest.NewRecorder()
+	h.handleUpdateServer(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update must succeed without the write-only secret, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(st.updates) != 1 {
+		t.Fatal("update not recorded")
+	}
+	settings, _ := st.updates[0]["settings"].(map[string]any)
+	if settings["private_key_file"] != "/run/secrets/ath-ed25519" {
+		t.Fatalf("stored secret reference must survive edits that omit it: %#v", settings)
 	}
 }

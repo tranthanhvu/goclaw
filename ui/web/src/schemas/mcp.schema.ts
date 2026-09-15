@@ -17,6 +17,18 @@ export const mcpFormSchema = z.object({
   // LLM sees server-specific quirks. Persisted under settings.tool_hints.
   toolHintsGlobal: z.string(),
   toolHintsTools: z.record(z.string(), z.string()),
+  // ATH connector registration (settings.mode="ath-connector"). Required as a
+  // group when the toggle is on — enforced in the form submit, mirroring the
+  // backend enablement contract.
+  athConnector: z.boolean(),
+  athGatewayUrl: z.string(),
+  athConnectorId: z.string(),
+  athEnvironment: z.string(),
+  athIssuer: z.string(),
+  athKeyId: z.string(),
+  athPrivateKeyFile: z.string(),
+  athChannelInstanceId: z.string(),
+  athPurpose: z.enum(["tenant_contract", "sales_inventory", "management_access"]),
 });
 
 export type MCPFormData = z.infer<typeof mcpFormSchema>;

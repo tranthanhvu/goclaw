@@ -16,6 +16,7 @@ import { isValidSlug } from "@/lib/slug";
 import { mcpFormSchema, type MCPFormData } from "@/schemas/mcp.schema";
 import { McpConnectionFields } from "./mcp-connection-fields";
 import { McpSettingsFields } from "./mcp-settings-fields";
+import { McpConnectorFields } from "./mcp-connector-fields";
 
 /** Split a string into shell-like tokens, treating commas and spaces outside quotes as delimiters. */
 function splitShellTokens(input: string): string[] {
@@ -68,6 +69,15 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
       requireUserCreds: false,
       toolHintsGlobal: "",
       toolHintsTools: {},
+      athConnector: false,
+      athGatewayUrl: "",
+      athConnectorId: "",
+      athEnvironment: "",
+      athIssuer: "",
+      athKeyId: "",
+      athPrivateKeyFile: "",
+      athChannelInstanceId: "",
+      athPurpose: "tenant_contract",
     },
   });
 
@@ -97,6 +107,16 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         requireUserCreds: server?.settings?.require_user_credentials ?? false,
         toolHintsGlobal: server?.settings?.tool_hints?.global ?? "",
         toolHintsTools: server?.settings?.tool_hints?.tools ?? {},
+        athConnector: server?.settings?.mode === "ath-connector",
+        athGatewayUrl: server?.settings?.gateway_url ?? "",
+        athConnectorId: server?.settings?.connector_id ?? "",
+        athEnvironment: server?.settings?.environment ?? "",
+        athIssuer: server?.settings?.issuer ?? "",
+        athKeyId: server?.settings?.key_id ?? "",
+        // Write-only: the API never returns the stored key file path.
+        athPrivateKeyFile: "",
+        athChannelInstanceId: server?.settings?.channel_instance_id ?? "",
+        athPurpose: (server?.settings?.purpose as MCPFormData["athPurpose"]) ?? "tenant_contract",
       });
       setError("");
       setTestResult(null);
@@ -149,6 +169,22 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
     if (!isValidSlug(data.name.trim())) { setError(t("form.errors.nameSlug")); return; }
     if (isStdio && !data.command.trim()) { setError(t("form.errors.commandRequired")); return; }
     if (!isStdio && !data.url.trim()) { setError(t("form.errors.urlRequired")); return; }
+    if (data.athConnector) {
+      const missing = [
+        ["athGatewayUrl", t("form.connector.errors.gatewayUrl")],
+        ["athConnectorId", t("form.connector.errors.connectorId")],
+        ["athEnvironment", t("form.connector.errors.environment")],
+        ["athIssuer", t("form.connector.errors.issuer")],
+        ["athKeyId", t("form.connector.errors.keyId")],
+        ["athChannelInstanceId", t("form.connector.errors.channelInstanceId")],
+      ] as const;
+      for (const [field, message] of missing) {
+        if (!(data[field] as string).trim()) { setError(message); return; }
+      }
+      if (!server && !data.athPrivateKeyFile.trim()) {
+        setError(t("form.connector.errors.privateKeyFile")); return;
+      }
+    }
 
     setLoading(true);
     setError("");
@@ -166,6 +202,18 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
       const settings: NonNullable<MCPServerInput["settings"]> = {
         require_user_credentials: data.requireUserCreds,
       };
+      if (data.athConnector) {
+        settings.mode = "ath-connector";
+        settings.gateway_url = data.athGatewayUrl.trim();
+        settings.connector_id = data.athConnectorId.trim();
+        settings.environment = data.athEnvironment.trim();
+        settings.issuer = data.athIssuer.trim();
+        settings.key_id = data.athKeyId.trim();
+        settings.channel_instance_id = data.athChannelInstanceId.trim();
+        settings.purpose = data.athPurpose;
+        const keyFile = data.athPrivateKeyFile.trim();
+        if (keyFile) settings.private_key_file = keyFile;
+      }
       if (hasHints) {
         settings.tool_hints = {
           ...(trimmedGlobal ? { global: trimmedGlobal } : {}),
@@ -200,6 +248,7 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         <div className="grid gap-4 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 overflow-y-auto min-h-0">
           <McpConnectionFields form={form} />
           <McpSettingsFields form={form} />
+          <McpConnectorFields form={form} editing={Boolean(server)} />
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 

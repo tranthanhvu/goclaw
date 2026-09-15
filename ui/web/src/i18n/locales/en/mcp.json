@@ -72,7 +72,35 @@
     "toolHintsPerTool": "Per-tool hints",
     "toolHintsToolNamePlaceholder": "Tool name (e.g. search)",
     "toolHintsToolValuePlaceholder": "Hint text shown to the LLM",
-    "toolHintsAdd": "Add hint"
+    "toolHintsAdd": "Add hint",
+    "connector": {
+      "enable": "Register ATH connector for a channel instance",
+      "gatewayUrl": "ATH gateway origin (exact HTTPS origin)",
+      "connectorId": "Connector ID (UUID)",
+      "environment": "Environment",
+      "issuer": "Issuer",
+      "keyId": "Signing key ID",
+      "privateKeyFile": "Signer private key file (protected mount path)",
+      "privateKeyUnchanged": "unchanged",
+      "privateKeyHint": "Write-only: never returned by the API; leave blank when editing to keep the stored path.",
+      "channelInstanceId": "Owned channel instance (UUID)",
+      "purpose": "Onboarding purpose",
+      "purposes": {
+        "tenantContract": "Tenant — contract questions",
+        "salesInventory": "Sales — inventory questions",
+        "managementAccess": "Management — operational access"
+      },
+      "trustHint": "Operator/admin only. The restricted onboarding intake for the owned channel arms only in the connector-role runtime.",
+      "errors": {
+        "gatewayUrl": "Gateway origin is required",
+        "connectorId": "Connector ID is required",
+        "environment": "Environment is required",
+        "issuer": "Issuer is required",
+        "keyId": "Key ID is required",
+        "channelInstanceId": "Channel instance is required",
+        "privateKeyFile": "Private key file is required for a new registration"
+      }
+    }
   },
   "grants": {
     "title": "Agent Grants - {{name}}",

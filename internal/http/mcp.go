@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -243,6 +244,7 @@ func (h *MCPHandler) handleUpdateServer(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
+	existingSrv, _ := h.store.GetServer(r.Context(), id)
 	if rawSettings, ok := updates["settings"]; ok {
 		encoded, err := json.Marshal(rawSettings)
 		if err != nil {
@@ -252,6 +254,21 @@ func (h *MCPHandler) handleUpdateServer(w http.ResponseWriter, r *http.Request) 
 		if athconnector.IsConnectorSettings(encoded) {
 			if !h.requireConnectorRole(w, r) {
 				return
+			}
+			// The signer secret reference is write-only: reads never return
+			// it, so an edit that omits private_key_file keeps the stored one
+			// instead of failing (or clearing) the registration.
+			if existingSrv != nil && !bytes.Contains(encoded, []byte("private_key_file")) {
+				if previous, err := athconnector.ParseRegistration(existingSrv.Settings); err == nil && previous != nil && previous.PrivateKeyFile != "" {
+					var merged map[string]any
+					if json.Unmarshal(encoded, &merged) == nil {
+						merged["private_key_file"] = previous.PrivateKeyFile
+						if reencoded, err := json.Marshal(merged); err == nil {
+							encoded = reencoded
+							updates["settings"] = merged
+						}
+					}
+				}
 			}
 			if _, err := athconnector.ParseRegistration(encoded); err != nil {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgConnectorRegistrationInvalid, err.Error())})
@@ -265,7 +282,6 @@ func (h *MCPHandler) handleUpdateServer(w http.ResponseWriter, r *http.Request) 
 
 	// Security validation: validate updated fields
 	// For updates, we need to consider the existing server + updated fields
-	existingSrv, _ := h.store.GetServer(r.Context(), id)
 	if existingSrv != nil {
 		// Determine effective values (update or existing)
 		transport := existingSrv.Transport

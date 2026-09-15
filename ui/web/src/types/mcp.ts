@@ -16,6 +16,17 @@ export interface MCPServerData {
       global?: string;
       tools?: Record<string, string>;
     };
+    /** ATH connector registration (mode="ath-connector"). private_key_file is
+     *  write-only: never present in API responses; omit on update to keep it. */
+    mode?: "ath-connector";
+    gateway_url?: string;
+    connector_id?: string;
+    environment?: string;
+    issuer?: string;
+    key_id?: string;
+    private_key_file?: string;
+    channel_instance_id?: string;
+    purpose?: "tenant_contract" | "sales_inventory" | "management_access";
   };
   enabled: boolean;
   created_by: string;
@@ -41,6 +52,17 @@ export interface MCPServerInput {
       global?: string;
       tools?: Record<string, string>;
     };
+    /** ATH connector registration (mode="ath-connector"). private_key_file is
+     *  write-only: never present in API responses; omit on update to keep it. */
+    mode?: "ath-connector";
+    gateway_url?: string;
+    connector_id?: string;
+    environment?: string;
+    issuer?: string;
+    key_id?: string;
+    private_key_file?: string;
+    channel_instance_id?: string;
+    purpose?: "tenant_contract" | "sales_inventory" | "management_access";
   };
   enabled?: boolean;
 }
