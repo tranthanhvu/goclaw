@@ -16,11 +16,12 @@ type AccountRecord struct {
 	AccountEpoch      int
 }
 
-// AccountRegistry resolves (and registers) the stable account identity for a
-// provider login on a channel instance. It is backed by the ATH channel
-// account store in the wiring layer.
+// AccountRegistry records the ATH-issued account identity configured for a
+// channel instance. The gateway owns the identity: AlignAccount adopts the
+// configured values verbatim (keeping a local bookkeeping row) and never
+// mints ids or bumps epochs on its own.
 type AccountRegistry interface {
-	EnsureAccount(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider, providerAccountID string) (AccountRecord, error)
+	AlignAccount(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider string, configured AccountBinding) (AccountRecord, error)
 }
 
 // Harness carries the connector enablement for one channel instance from the
@@ -29,6 +30,7 @@ type AccountRegistry interface {
 // then the restricted intake stays inert and generic policy applies.
 type Harness struct {
 	cfg      Config
+	account  AccountBinding
 	purpose  OnboardingPurpose
 	hints    ApprovalHints
 	accounts AccountRegistry
@@ -36,9 +38,12 @@ type Harness struct {
 }
 
 // NewHarness validates the enablement before any channel can carry it.
-func NewHarness(cfg Config, purpose OnboardingPurpose, hints ApprovalHints, accounts AccountRegistry) (*Harness, error) {
+func NewHarness(cfg Config, account AccountBinding, purpose OnboardingPurpose, hints ApprovalHints, accounts AccountRegistry) (*Harness, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
+	}
+	if err := account.validate(); err != nil {
+		return nil, fmt.Errorf("athconnector: configured account: %w", err)
 	}
 	switch purpose {
 	case PurposeTenantContract, PurposeSalesInventory, PurposeManagementAccess:
@@ -49,7 +54,7 @@ func NewHarness(cfg Config, purpose OnboardingPurpose, hints ApprovalHints, acco
 		return nil, errors.New("athconnector: account registry is required")
 	}
 	now := time.Now
-	return &Harness{cfg: cfg, purpose: purpose, hints: hints, accounts: accounts, now: now}, nil
+	return &Harness{cfg: cfg, account: account, purpose: purpose, hints: hints, accounts: accounts, now: now}, nil
 }
 
 // ArmGroupIntake loads the signer key, builds the pinned control client, and
@@ -89,12 +94,18 @@ func (h *Harness) arm(ctx context.Context, tenantID, channelInstanceID uuid.UUID
 	if err != nil {
 		return nil, AccountBinding{}, err
 	}
-	account, err := h.accounts.EnsureAccount(ctx, tenantID, channelInstanceID, provider, providerAccountID)
+	// The configured ATH-issued binding is the truth the runtime signs with;
+	// a provider login under a different account fails closed at submission
+	// (origin/binding mismatch) until the operator updates the registration.
+	if providerAccountID != h.account.ProviderAccountID {
+		return nil, AccountBinding{}, fmt.Errorf("athconnector: provider account %q does not match the registered account %q; update the registration", providerAccountID, h.account.ProviderAccountID)
+	}
+	record, err := h.accounts.AlignAccount(ctx, tenantID, channelInstanceID, provider, h.account)
 	if err != nil {
-		return nil, AccountBinding{}, fmt.Errorf("athconnector: account registration failed: %w", err)
+		return nil, AccountBinding{}, fmt.Errorf("athconnector: account alignment failed: %w", err)
 	}
-	if account.ProviderAccountID != providerAccountID || account.AccountEpoch < 1 {
-		return nil, AccountBinding{}, errors.New("athconnector: account registry returned an inconsistent binding")
+	if record.ID != h.account.AccountID || record.AccountEpoch != h.account.AccountEpoch || record.ProviderAccountID != h.account.ProviderAccountID {
+		return nil, AccountBinding{}, errors.New("athconnector: account registry diverged from the configured binding")
 	}
-	return client, AccountBinding{AccountID: account.ID, ProviderAccountID: account.ProviderAccountID, AccountEpoch: account.AccountEpoch}, nil
+	return client, h.account, nil
 }

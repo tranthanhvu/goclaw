@@ -28,6 +28,9 @@ export const mcpFormSchema = z.object({
   athKeyId: z.string(),
   athPrivateKeyFile: z.string(),
   athChannelInstanceId: z.string(),
+  athAccountId: z.string(),
+  athAccountEpoch: z.string(),
+  athProviderAccountId: z.string(),
   athPurpose: z.enum(["tenant_contract", "sales_inventory", "management_access"]),
 });
 

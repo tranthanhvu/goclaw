@@ -27,7 +27,8 @@ func connectorSettingsJSON(instanceID uuid.UUID, enabled bool) []byte {
 	settings := `{"mode":"ath-connector","gateway_url":"http://127.0.0.1:56321","connector_id":"` +
 		uuid.New().String() + `","environment":"development","issuer":"goclaw-ath","key_id":"key-1",` +
 		`"private_key_file":"/run/secrets/ath-ed25519","channel_instance_id":"` + instanceID.String() +
-		`","purpose":"tenant_contract"}`
+		`","account_id":"` + uuid.New().String() + `","account_epoch":2,"provider_account_id":"account-1",` +
+		`"purpose":"tenant_contract"}`
 	return []byte(settings)
 }
 
@@ -61,8 +62,8 @@ func TestConnectorHarnessFactoryResolvesOwnedInstanceOnly(t *testing.T) {
 
 type stubATHAccountStore struct{}
 
-func (s *stubATHAccountStore) EnsureAccount(_ context.Context, _, _ uuid.UUID, _, providerAccountID string) (store.ATHChannelAccount, error) {
-	return store.ATHChannelAccount{ID: uuid.New(), ProviderAccountID: providerAccountID, AccountEpoch: 1}, nil
+func (s *stubATHAccountStore) AlignAccount(_ context.Context, _, _ uuid.UUID, _ string, configured store.ATHAccountBinding) (store.ATHChannelAccount, error) {
+	return store.ATHChannelAccount{ID: configured.ID, ProviderAccountID: configured.ProviderAccountID, AccountEpoch: configured.AccountEpoch}, nil
 }
 
 var _ = athconnector.RuntimeRoleConnector

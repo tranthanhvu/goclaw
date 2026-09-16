@@ -77,6 +77,9 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
       athKeyId: "",
       athPrivateKeyFile: "",
       athChannelInstanceId: "",
+      athAccountId: "",
+      athAccountEpoch: "",
+      athProviderAccountId: "",
       athPurpose: "tenant_contract",
     },
   });
@@ -116,6 +119,9 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         // Write-only: the API never returns the stored key file path.
         athPrivateKeyFile: "",
         athChannelInstanceId: server?.settings?.channel_instance_id ?? "",
+        athAccountId: server?.settings?.account_id ?? "",
+        athAccountEpoch: server?.settings?.account_epoch ? String(server.settings.account_epoch) : "",
+        athProviderAccountId: server?.settings?.provider_account_id ?? "",
         athPurpose: (server?.settings?.purpose as MCPFormData["athPurpose"]) ?? "tenant_contract",
       });
       setError("");
@@ -177,6 +183,8 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         ["athIssuer", t("form.connector.errors.issuer")],
         ["athKeyId", t("form.connector.errors.keyId")],
         ["athChannelInstanceId", t("form.connector.errors.channelInstanceId")],
+        ["athAccountId", t("form.connector.errors.accountId")],
+        ["athProviderAccountId", t("form.connector.errors.providerAccountId")],
       ] as const;
       for (const [field, message] of missing) {
         if (!(data[field] as string).trim()) { setError(message); return; }
@@ -210,6 +218,10 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         settings.issuer = data.athIssuer.trim();
         settings.key_id = data.athKeyId.trim();
         settings.channel_instance_id = data.athChannelInstanceId.trim();
+        settings.account_id = data.athAccountId.trim();
+        settings.provider_account_id = data.athProviderAccountId.trim();
+        const epoch = data.athAccountEpoch.trim();
+        settings.account_epoch = epoch ? Number(epoch) : 1;
         settings.purpose = data.athPurpose;
         const keyFile = data.athPrivateKeyFile.trim();
         if (keyFile) settings.private_key_file = keyFile;

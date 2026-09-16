@@ -5,6 +5,7 @@ package sqlitestore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,27 +22,25 @@ func NewSQLiteATHAccountStore(db *sql.DB) *SQLiteATHAccountStore {
 	return &SQLiteATHAccountStore{db: db}
 }
 
-// EnsureAccount registers the current provider login for a channel instance;
-// the same provider account is idempotent, a different provider account bumps
-// the epoch atomically in one upsert.
-func (s *SQLiteATHAccountStore) EnsureAccount(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider, providerAccountID string) (store.ATHChannelAccount, error) {
-	if err := store.ValidateATHAccountInput(tenantID, channelInstanceID, provider, providerAccountID); err != nil {
+// AlignAccount adopts the ATH-issued identity configured for the instance,
+// mirroring the Postgres implementation exactly.
+func (s *SQLiteATHAccountStore) AlignAccount(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider string, configured store.ATHAccountBinding) (store.ATHChannelAccount, error) {
+	if err := store.ValidateATHAccountInput(tenantID, channelInstanceID, provider, configured.ProviderAccountID); err != nil {
 		return store.ATHChannelAccount{}, err
 	}
-	id := store.GenNewID()
+	if configured.ID == uuid.Nil || configured.AccountEpoch < 1 {
+		return store.ATHChannelAccount{}, errors.New("ath account: configured binding must carry the ATH-issued id and a positive epoch")
+	}
 	row := s.db.QueryRowContext(ctx, `
 		INSERT INTO ath_channel_accounts (id, tenant_id, channel_instance_id, provider, provider_account_id, account_epoch)
-		VALUES (?, ?, ?, ?, ?, 1)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT (tenant_id, channel_instance_id, provider) DO UPDATE SET
+			id = excluded.id,
 			provider_account_id = excluded.provider_account_id,
-			account_epoch = CASE
-				WHEN ath_channel_accounts.provider_account_id = excluded.provider_account_id
-				THEN ath_channel_accounts.account_epoch
-				ELSE ath_channel_accounts.account_epoch + 1
-			END,
+			account_epoch = excluded.account_epoch,
 			updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 		RETURNING id, provider_account_id, account_epoch, created_at, updated_at`,
-		id.String(), tenantID.String(), channelInstanceID.String(), provider, providerAccountID)
+		configured.ID.String(), tenantID.String(), channelInstanceID.String(), provider, configured.ProviderAccountID, configured.AccountEpoch)
 	var account store.ATHChannelAccount
 	account.TenantID = tenantID
 	account.ChannelInstanceID = channelInstanceID

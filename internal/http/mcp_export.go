@@ -1,6 +1,8 @@
 package http
 
 import (
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
+
 	"archive/tar"
 	"compress/gzip"
 	"context"
@@ -104,6 +106,11 @@ func (h *MCPHandler) writeMCPExportArchive(ctx context.Context, w io.Writer, pro
 		return fmt.Errorf("query mcp servers: %w", err)
 	}
 
+	// The archive is as public as any read: strip the write-only signer secret
+	// reference from connector registrations before serialization.
+	for i := range servers {
+		servers[i].Settings = athconnector.RedactSettings(servers[i].Settings)
+	}
 	if len(servers) > 0 {
 		data, err := marshalJSONL(servers)
 		if err != nil {

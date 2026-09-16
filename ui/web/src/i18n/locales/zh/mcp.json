@@ -98,8 +98,13 @@
         "issuer": "必须填写签发者",
         "keyId": "必须填写密钥 ID",
         "channelInstanceId": "必须填写频道实例",
-        "privateKeyFile": "新注册必须填写私钥文件"
-      }
+        "privateKeyFile": "新注册必须填写私钥文件",
+        "accountId": "必须填写 ATH 账户 ID",
+        "providerAccountId": "必须填写 Provider 账户 ID"
+      },
+      "accountId": "ATH 账户 ID（UUID）",
+      "providerAccountId": "Provider 账户 ID",
+      "accountEpoch": "账户 epoch（默认 1）"
     }
   },
   "grants": {

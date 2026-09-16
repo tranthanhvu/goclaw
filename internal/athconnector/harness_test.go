@@ -14,27 +14,18 @@ import (
 )
 
 type fakeAccountRegistry struct {
-	records map[string]AccountRecord
-	err     error
+	err   error
+	last  AccountBinding
+	calls int
 }
 
-func (f *fakeAccountRegistry) EnsureAccount(_ context.Context, _, _ uuid.UUID, provider, providerAccountID string) (AccountRecord, error) {
+func (f *fakeAccountRegistry) AlignAccount(_ context.Context, _, _ uuid.UUID, _ string, configured AccountBinding) (AccountRecord, error) {
+	f.calls++
+	f.last = configured
 	if f.err != nil {
 		return AccountRecord{}, f.err
 	}
-	if f.records == nil {
-		f.records = map[string]AccountRecord{}
-	}
-	if existing, ok := f.records[provider]; ok && existing.ProviderAccountID == providerAccountID {
-		return existing, nil
-	}
-	next := AccountRecord{ID: uuid.New(), ProviderAccountID: providerAccountID, AccountEpoch: 1}
-	if existing, ok := f.records[provider]; ok {
-		next.ID = existing.ID
-		next.AccountEpoch = existing.AccountEpoch + 1
-	}
-	f.records[provider] = next
-	return next, nil
+	return AccountRecord{ID: configured.AccountID, ProviderAccountID: configured.ProviderAccountID, AccountEpoch: configured.AccountEpoch}, nil
 }
 
 func writeTestKey(t *testing.T) string {
@@ -64,7 +55,8 @@ func harnessTestConfig(keyFile string) Config {
 
 func TestHarnessArmsGroupIntakeFromVerifiedLogin(t *testing.T) {
 	registry := &fakeAccountRegistry{}
-	harness, err := NewHarness(harnessTestConfig(writeTestKey(t)), PurposeTenantContract, ApprovalHints{}, registry)
+	athAccount := AccountBinding{AccountID: uuid.New(), ProviderAccountID: "account-1", AccountEpoch: 3}
+	harness, err := NewHarness(harnessTestConfig(writeTestKey(t)), athAccount, PurposeTenantContract, ApprovalHints{}, registry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,51 +66,49 @@ func TestHarnessArmsGroupIntakeFromVerifiedLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !intake.Enabled() || intake.ProviderAccountID() != "account-1" || intake.AccountEpoch() != 1 {
-		t.Fatalf("intake not armed from verified login: %+v", intake)
+	if !intake.Enabled() || intake.ProviderAccountID() != "account-1" || intake.AccountEpoch() != athAccount.AccountEpoch {
+		t.Fatalf("intake not armed with the ATH-issued binding: %+v", intake)
+	}
+	if registry.last != athAccount {
+		t.Fatalf("registry must record the configured binding: %+v", registry.last)
 	}
 
-	// Re-login under another account bumps the epoch; the new intake binding
-	// reflects it, so origins minted for the old account fail submission.
-	rearmed, err := harness.ArmGroupIntake(context.Background(), tenantID, instanceID, "zalo_personal", "account-2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rearmed.ProviderAccountID() != "account-2" || rearmed.AccountEpoch() != 2 {
-		t.Fatalf("re-login must rebind at the bumped epoch: %+v", rearmed)
+	// A provider login under a different account fails closed: ATH owns the
+	// identity, so the operator must update the registration after re-login.
+	if _, err := harness.ArmGroupIntake(context.Background(), tenantID, instanceID, "zalo_personal", "account-2"); err == nil {
+		t.Fatal("unregistered provider login must fail closed")
 	}
 }
 
 func TestHarnessFailsClosedOnUnprotectedKeyOrRegistryOutage(t *testing.T) {
+	goodBinding := AccountBinding{AccountID: uuid.New(), ProviderAccountID: "account-1", AccountEpoch: 1}
+
 	keyFile := writeTestKey(t)
 	if err := os.Chmod(keyFile, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewHarness(harnessTestConfig(keyFile), PurposeTenantContract, ApprovalHints{}, &fakeAccountRegistry{}); err != nil {
-		t.Fatalf("harness construction validates lazily on arm, got: %v", err)
-	}
-	harness, err := NewHarness(harnessTestConfig(writeTestKey(t)), PurposeTenantContract, ApprovalHints{}, &fakeAccountRegistry{})
+	badKeyHarness, err := NewHarness(harnessTestConfig(keyFile), goodBinding, PurposeTenantContract, ApprovalHints{}, &fakeAccountRegistry{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	protectedHarness, err := NewHarness(harnessTestConfig(keyFile), PurposeTenantContract, ApprovalHints{}, &fakeAccountRegistry{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = harness, protectedHarness
-	badKeyHarness := protectedHarness
 	if _, err := badKeyHarness.ArmGroupIntake(context.Background(), uuid.New(), uuid.New(), "zalo_personal", "account-1"); err == nil {
 		t.Fatal("group/world-readable key file must fail arm")
 	}
+
 	outage := &fakeAccountRegistry{err: context.DeadlineExceeded}
-	outageHarness, err := NewHarness(harnessTestConfig(writeTestKey(t)), PurposeTenantContract, ApprovalHints{}, outage)
+	outageHarness, err := NewHarness(harnessTestConfig(writeTestKey(t)), goodBinding, PurposeTenantContract, ApprovalHints{}, outage)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := outageHarness.ArmGroupIntake(context.Background(), uuid.New(), uuid.New(), "zalo_personal", "account-1"); err == nil {
 		t.Fatal("registry outage must fail arm")
 	}
-	if _, err := NewHarness(harnessTestConfig(writeTestKey(t)), OnboardingPurpose("root"), ApprovalHints{}, &fakeAccountRegistry{}); err == nil {
+	if _, err := NewHarness(harnessTestConfig(writeTestKey(t)), goodBinding, OnboardingPurpose("root"), ApprovalHints{}, &fakeAccountRegistry{}); err == nil {
 		t.Fatal("unknown purpose must fail construction")
+	}
+	unbound := goodBinding
+	unbound.AccountID = uuid.Nil
+	if _, err := NewHarness(harnessTestConfig(writeTestKey(t)), unbound, PurposeTenantContract, ApprovalHints{}, &fakeAccountRegistry{}); err == nil {
+		t.Fatal("unbound account must fail construction")
 	}
 }

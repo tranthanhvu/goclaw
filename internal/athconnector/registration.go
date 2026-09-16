@@ -17,14 +17,22 @@ const SettingsModeATHConnector = "ath-connector"
 // isolated connector service's protected secret mount and is stripped from
 // every API response, list, and export.
 type Registration struct {
-	Mode              string            `json:"mode"`
-	GatewayURL        string            `json:"gateway_url"`
-	ConnectorID       uuid.UUID         `json:"connector_id"`
-	Environment       string            `json:"environment"`
-	Issuer            string            `json:"issuer"`
-	KeyID             string            `json:"key_id"`
-	PrivateKeyFile    string            `json:"private_key_file,omitempty"`
-	ChannelInstanceID uuid.UUID         `json:"channel_instance_id"`
+	Mode              string    `json:"mode"`
+	GatewayURL        string    `json:"gateway_url"`
+	ConnectorID       uuid.UUID `json:"connector_id"`
+	Environment       string    `json:"environment"`
+	Issuer            string    `json:"issuer"`
+	KeyID             string    `json:"key_id"`
+	PrivateKeyFile    string    `json:"private_key_file,omitempty"`
+	ChannelInstanceID uuid.UUID `json:"channel_instance_id"`
+	// AccountID/AccountEpoch are the ATH-issued account identity for this
+	// connector: the gateway only accepts assertions whose account_id and
+	// account_epoch match its own agent_connector_accounts row, so the
+	// operator pastes them from the ATH registration. ATH is the single
+	// authority; the connector never mints or bumps them locally.
+	AccountID         uuid.UUID         `json:"account_id"`
+	AccountEpoch      int               `json:"account_epoch"`
+	ProviderAccountID string            `json:"provider_account_id"`
 	Purpose           OnboardingPurpose `json:"purpose"`
 }
 
@@ -53,6 +61,19 @@ func ParseRegistration(settings json.RawMessage) (*Registration, error) {
 	}
 	if reg.ChannelInstanceID == uuid.Nil {
 		return nil, errors.New("athconnector: connector registration requires the owned channel instance id")
+	}
+	if reg.AccountID == uuid.Nil {
+		return nil, errors.New("athconnector: connector registration requires the ATH-issued account id")
+	}
+	if reg.AccountEpoch < 1 {
+		if reg.AccountEpoch == 0 {
+			reg.AccountEpoch = 1
+		} else {
+			return nil, fmt.Errorf("athconnector: account epoch must be positive, got %d", reg.AccountEpoch)
+		}
+	}
+	if reg.ProviderAccountID == "" {
+		return nil, errors.New("athconnector: connector registration requires the verified provider account id")
 	}
 	switch reg.Purpose {
 	case PurposeTenantContract, PurposeSalesInventory, PurposeManagementAccess:
@@ -112,6 +133,11 @@ func RedactSettings(settings json.RawMessage) json.RawMessage {
 		return json.RawMessage(`{}`)
 	}
 	return out
+}
+
+// AccountBinding returns the ATH-issued identity the runtime signs with.
+func (r *Registration) AccountBinding() AccountBinding {
+	return AccountBinding{AccountID: r.AccountID, ProviderAccountID: r.ProviderAccountID, AccountEpoch: r.AccountEpoch}
 }
 
 // Config converts the registration into the runtime enablement config.

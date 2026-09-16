@@ -45,51 +45,53 @@ func seedChannelInstance(t *testing.T, db *sql.DB, instanceID uuid.UUID) {
 	}
 }
 
-func TestATHAccountRegistryMintsStableIdentityAndBumpsEpochOnRelogin(t *testing.T) {
+func TestATHAccountRegistryAdoptsConfiguredBinding(t *testing.T) {
 	db, ctx := newTestATHAccountDB(t)
 	s := NewSQLiteATHAccountStore(db)
 	tenantID := store.MasterTenantID
 	instanceID := uuid.New()
 	seedChannelInstance(t, db, instanceID)
 
-	first, err := s.EnsureAccount(ctx, tenantID, instanceID, "zalo_personal", "account-1")
+	athIssued := store.ATHAccountBinding{ID: uuid.New(), ProviderAccountID: "account-1", AccountEpoch: 4}
+	first, err := s.AlignAccount(ctx, tenantID, instanceID, "zalo_personal", athIssued)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.AccountEpoch != 1 || first.ProviderAccountID != "account-1" {
-		t.Fatalf("first registration wrong: %+v", first)
+	if first.ID != athIssued.ID || first.ProviderAccountID != "account-1" || first.AccountEpoch != 4 {
+		t.Fatalf("registry must adopt the configured binding verbatim: %+v", first)
 	}
 
-	// Same provider login re-registers idempotently with the same identity.
-	again, err := s.EnsureAccount(ctx, tenantID, instanceID, "zalo_personal", "account-1")
+	// Re-aligning the same configuration is idempotent.
+	again, err := s.AlignAccount(ctx, tenantID, instanceID, "zalo_personal", athIssued)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again.ID != first.ID || again.AccountEpoch != 1 {
-		t.Fatalf("same login must be idempotent: %+v vs %+v", first, again)
+	if again != first {
+		t.Fatalf("same configuration must be idempotent: %+v vs %+v", first, again)
 	}
 
-	// A different provider account on the same instance bumps the epoch while
-	// keeping the stable account UUID: old contexts are invalidated.
-	relogin, err := s.EnsureAccount(ctx, tenantID, instanceID, "zalo_personal", "account-2")
+	// ATH re-issued the account (new epoch from an admin action): the row
+	// realigns to the new configured truth; nothing is minted locally.
+	reissued := athIssued
+	reissued.AccountEpoch = 5
+	reissued.ProviderAccountID = "account-2"
+	realigned, err := s.AlignAccount(ctx, tenantID, instanceID, "zalo_personal", reissued)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if relogin.ID != first.ID {
-		t.Fatalf("stable account UUID must survive re-login: %s vs %s", first.ID, relogin.ID)
-	}
-	if relogin.ProviderAccountID != "account-2" || relogin.AccountEpoch != 2 {
-		t.Fatalf("re-login must bump epoch: %+v", relogin)
+	if realigned.ID != reissued.ID || realigned.ProviderAccountID != "account-2" || realigned.AccountEpoch != 5 {
+		t.Fatalf("realignment wrong: %+v", realigned)
 	}
 
-	// Another instance keeps an independent identity at epoch 1.
+	// Another instance keeps an independent row.
 	otherInstance := uuid.New()
 	seedChannelInstance(t, db, otherInstance)
-	other, err := s.EnsureAccount(ctx, tenantID, otherInstance, "zalo_personal", "account-2")
+	otherBinding := store.ATHAccountBinding{ID: uuid.New(), ProviderAccountID: "account-2", AccountEpoch: 1}
+	other, err := s.AlignAccount(ctx, tenantID, otherInstance, "zalo_personal", otherBinding)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if other.ID == first.ID || other.AccountEpoch != 1 {
+	if other.ID == reissued.ID || other.AccountEpoch != 1 {
 		t.Fatalf("per-instance registry isolation broken: %+v", other)
 	}
 }
@@ -97,13 +99,24 @@ func TestATHAccountRegistryMintsStableIdentityAndBumpsEpochOnRelogin(t *testing.
 func TestATHAccountRegistryRejectsIncompleteInput(t *testing.T) {
 	db, ctx := newTestATHAccountDB(t)
 	s := NewSQLiteATHAccountStore(db)
-	if _, err := s.EnsureAccount(ctx, store.MasterTenantID, uuid.Nil, "zalo_personal", "account-1"); err == nil {
+	valid := store.ATHAccountBinding{ID: uuid.New(), ProviderAccountID: "account-1", AccountEpoch: 1}
+	if _, err := s.AlignAccount(ctx, store.MasterTenantID, uuid.Nil, "zalo_personal", valid); err == nil {
 		t.Fatal("missing channel instance must fail")
 	}
-	if _, err := s.EnsureAccount(ctx, store.MasterTenantID, uuid.New(), "zalo_personal", ""); err == nil {
+	if _, err := s.AlignAccount(ctx, store.MasterTenantID, uuid.New(), "zalo_personal", store.ATHAccountBinding{ID: uuid.New(), AccountEpoch: 1}); err == nil {
 		t.Fatal("missing provider account must fail")
 	}
-	if _, err := s.EnsureAccount(ctx, store.MasterTenantID, uuid.New(), "", "account-1"); err == nil {
+	if _, err := s.AlignAccount(ctx, store.MasterTenantID, uuid.New(), "", valid); err == nil {
 		t.Fatal("missing provider must fail")
+	}
+	unbound := valid
+	unbound.ID = uuid.Nil
+	if _, err := s.AlignAccount(ctx, store.MasterTenantID, uuid.New(), "zalo_personal", unbound); err == nil {
+		t.Fatal("missing ATH-issued id must fail")
+	}
+	zeroEpoch := valid
+	zeroEpoch.AccountEpoch = 0
+	if _, err := s.AlignAccount(ctx, store.MasterTenantID, uuid.New(), "zalo_personal", zeroEpoch); err == nil {
+		t.Fatal("zero epoch must fail")
 	}
 }

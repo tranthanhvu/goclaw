@@ -1,7 +1,6 @@
 package athconnector
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -60,22 +59,39 @@ type CatalogEntry struct {
 }
 
 // jsonbString renders s exactly as Postgres jsonb::text renders string values:
-// JSON escaping without HTML escaping (which Go's default marshal applies to
-// <, >, &). This keeps digests byte-compatible with the gateway.
+// only ", \\, and control characters are escaped (short forms \\b \\f \\n \\r
+// \\t, otherwise \\u00xx lowercase hex); everything else — including <, >, &
+// and U+2028/U+2029 — stays raw. Hand-rolled so the output is owned end to
+// end: no post-processing that could corrupt literal escape-shaped text.
 func jsonbString(s string) (string, error) {
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(s); err != nil {
-		return "", err
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			if r < 0x20 {
+				fmt.Fprintf(&b, `\u%04x`, r)
+				continue
+			}
+			b.WriteRune(r)
+		}
 	}
-	rendered := strings.TrimSuffix(buf.String(), "\n")
-	// Go always escapes U+2028/U+2029; Postgres jsonb::text emits them raw.
-	// The escaped six-byte form cannot collide: an input backslash before
-	// "u2028" is itself escaped to "\\u2028".
-	rendered = strings.ReplaceAll(rendered, `\u2028`, "\u2028")
-	rendered = strings.ReplaceAll(rendered, `\u2029`, "\u2029")
-	return rendered, nil
+	b.WriteByte('"')
+	return b.String(), nil
 }
 
 // CanonicalJSONB renders one entry exactly as Postgres renders the jsonb
@@ -395,6 +411,14 @@ func (w *GroupCatalogWorker) RunOnce(ctx context.Context) error {
 	if err != nil {
 		w.failQuietly(ctx, *job, "entries_invalid", err)
 		return err
+	}
+	if len(entries) == 0 {
+		// A legitimately empty joined-group list cannot be expressed as a
+		// complete snapshot under the current gateway contract (minimum one
+		// page): report the distinct bounded outcome instead of a generic
+		// finalize rejection, and never fabricate empty success.
+		w.failQuietly(ctx, *job, "no_joined_groups", nil)
+		return errors.New("athconnector: account has no joined groups to publish")
 	}
 	if err := w.publish(ctx, *job, entries); err != nil {
 		return err

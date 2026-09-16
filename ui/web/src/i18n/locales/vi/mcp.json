@@ -98,8 +98,13 @@
         "issuer": "Bắt buộc nhập issuer",
         "keyId": "Bắt buộc nhập ID khóa",
         "channelInstanceId": "Bắt buộc nhập channel instance",
-        "privateKeyFile": "Đăng ký mới bắt buộc nhập file khóa riêng"
-      }
+        "privateKeyFile": "Đăng ký mới bắt buộc nhập file khóa riêng",
+        "accountId": "Bắt buộc nhập ATH account ID",
+        "providerAccountId": "Bắt buộc nhập Provider account ID"
+      },
+      "accountId": "ATH account ID (UUID)",
+      "providerAccountId": "Provider account ID",
+      "accountEpoch": "Account epoch (mặc định 1)"
     }
   },
   "grants": {

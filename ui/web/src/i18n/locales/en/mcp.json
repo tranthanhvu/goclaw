@@ -98,8 +98,13 @@
         "issuer": "Issuer is required",
         "keyId": "Key ID is required",
         "channelInstanceId": "Channel instance is required",
-        "privateKeyFile": "Private key file is required for a new registration"
-      }
+        "privateKeyFile": "Private key file is required for a new registration",
+        "accountId": "ATH account ID is required",
+        "providerAccountId": "Provider account ID is required"
+      },
+      "accountId": "ATH account ID (UUID)",
+      "providerAccountId": "Provider account ID",
+      "accountEpoch": "Account epoch (default 1)"
     }
   },
   "grants": {

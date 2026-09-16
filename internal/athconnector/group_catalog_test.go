@@ -181,6 +181,14 @@ func TestCatalogEntryCanonicalJSONBMatchesPostgresText(t *testing.T) {
 	if !strings.Contains(string(canonical), `"channel_instance_id": "`+instance.String()+`"}, "display_name"`) {
 		t.Fatalf("hintless metadata tail wrong: %s", canonical)
 	}
+	// Literal escape-shaped text and raw U+2028/U+2029 must survive the
+	// escaper as valid JSON with PG-identical bytes.
+	if literal, err := jsonbString("back\\u2028text"); err != nil || literal != "\"back\\\\u2028text\"" {
+		t.Fatalf("literal escape-shaped text corrupted: %q err=%v", literal, err)
+	}
+	if raw, err := jsonbString("a b c"); err != nil || raw != "\"a b c\"" {
+		t.Fatalf("raw line separators must stay raw: %q err=%v", raw, err)
+	}
 	entries, err := CanonicalEntriesJSONB([]CatalogEntry{entry, entry})
 	if err != nil {
 		t.Fatal(err)

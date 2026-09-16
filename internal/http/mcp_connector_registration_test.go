@@ -43,7 +43,8 @@ func validConnectorSettings() string {
 	return `{"mode":"ath-connector","gateway_url":"http://127.0.0.1:9443","connector_id":"` +
 		uuid.New().String() + `","environment":"production","issuer":"goclaw-ath","key_id":"key-1",` +
 		`"private_key_file":"/run/secrets/ath-ed25519","channel_instance_id":"` + uuid.New().String() +
-		`","purpose":"tenant_contract"}`
+		`","account_id":"` + uuid.New().String() + `","account_epoch":1,"provider_account_id":"account-1",` +
+		`"purpose":"tenant_contract"}`
 }
 
 func runConnectorCreate(t *testing.T, h *MCPHandler, settings string, role string) *httptest.ResponseRecorder {
@@ -75,7 +76,8 @@ func TestConnectorRegistrationValidatesAndNeverEchoesSecretReference(t *testing.
 	bad := `{"mode":"ath-connector","gateway_url":"http://127.0.0.1:9443/redirectable","connector_id":"` +
 		uuid.New().String() + `","environment":"production","issuer":"goclaw-ath","key_id":"key-1",` +
 		`"private_key_file":"/run/secrets/ath-ed25519","channel_instance_id":"` + uuid.New().String() +
-		`","purpose":"tenant_contract"}`
+		`","account_id":"` + uuid.New().String() + `","provider_account_id":"account-1",` +
+		`"purpose":"tenant_contract"}`
 	if rec := runConnectorCreate(t, h, bad, "admin"); rec.Code != http.StatusBadRequest {
 		t.Fatalf("non-exact origin must be rejected, got %d: %s", rec.Code, rec.Body.String())
 	}

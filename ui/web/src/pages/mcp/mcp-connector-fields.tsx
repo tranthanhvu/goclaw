@@ -88,6 +88,21 @@ export function McpConnectorFields({ form, editing }: McpConnectorFieldsProps) {
           <Input id="ath-channel-instance" placeholder="00000000-0000-0000-0000-000000000000" {...register("athChannelInstanceId")} />
         </div>
         <div className="grid gap-1.5">
+          <Label htmlFor="ath-account-id">{t("form.connector.accountId")}</Label>
+          <Input id="ath-account-id" placeholder="00000000-0000-0000-0000-000000000000" {...register("athAccountId")} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="ath-provider-account">{t("form.connector.providerAccountId")}</Label>
+          <Input id="ath-provider-account" placeholder="account-1" {...register("athProviderAccountId")} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="ath-account-epoch">{t("form.connector.accountEpoch")}</Label>
+          <Input id="ath-account-epoch" type="number" min={1} placeholder="1" {...register("athAccountEpoch")} />
+        </div>
+        <div className="grid gap-1.5">
           <Label>{t("form.connector.purpose")}</Label>
           <Select value={purpose} onValueChange={(v) => setValue("athPurpose", v as MCPFormData["athPurpose"])}>
             <SelectTrigger>

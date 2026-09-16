@@ -26,6 +26,9 @@ export interface MCPServerData {
     key_id?: string;
     private_key_file?: string;
     channel_instance_id?: string;
+    account_id?: string;
+    account_epoch?: number;
+    provider_account_id?: string;
     purpose?: "tenant_contract" | "sales_inventory" | "management_access";
   };
   enabled: boolean;
@@ -62,6 +65,9 @@ export interface MCPServerInput {
     key_id?: string;
     private_key_file?: string;
     channel_instance_id?: string;
+    account_id?: string;
+    account_epoch?: number;
+    provider_account_id?: string;
     purpose?: "tenant_contract" | "sales_inventory" | "management_access";
   };
   enabled?: boolean;

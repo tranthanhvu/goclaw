@@ -15,8 +15,12 @@ type athAccountAdapter struct {
 	registry store.ATHAccountStore
 }
 
-func (a athAccountAdapter) EnsureAccount(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider, providerAccountID string) (athconnector.AccountRecord, error) {
-	account, err := a.registry.EnsureAccount(ctx, tenantID, channelInstanceID, provider, providerAccountID)
+func (a athAccountAdapter) AlignAccount(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider string, configured athconnector.AccountBinding) (athconnector.AccountRecord, error) {
+	account, err := a.registry.AlignAccount(ctx, tenantID, channelInstanceID, provider, store.ATHAccountBinding{
+		ID:                configured.AccountID,
+		ProviderAccountID: configured.ProviderAccountID,
+		AccountEpoch:      configured.AccountEpoch,
+	})
 	if err != nil {
 		return athconnector.AccountRecord{}, err
 	}
@@ -49,7 +53,7 @@ func ConnectorHarnessFactoryFor(mcpStore store.MCPServerStore, accounts store.AT
 				continue
 			}
 			hints := athconnector.ApprovalHints{ChannelDisplayName: inst.DisplayName}
-			return athconnector.NewHarness(registration.Config(), registration.Purpose, hints, athAccountAdapter{registry: accounts})
+			return athconnector.NewHarness(registration.Config(), registration.AccountBinding(), registration.Purpose, hints, athAccountAdapter{registry: accounts})
 		}
 		return nil, nil
 	}

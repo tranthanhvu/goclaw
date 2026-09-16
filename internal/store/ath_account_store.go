@@ -26,11 +26,20 @@ type ATHChannelAccount struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
-// ATHAccountStore persists channel account registrations. EnsureAccount is the
-// only mutation path: re-registering the same provider account is idempotent;
-// registering a different provider account on the same instance bumps the epoch.
+// ATHAccountBinding is the ATH-issued account identity configured for one
+// channel instance. ATH owns it; this store only records it.
+type ATHAccountBinding struct {
+	ID                uuid.UUID
+	ProviderAccountID string
+	AccountEpoch      int
+}
+
+// ATHAccountStore records the ATH-issued account identity for channel
+// instances. AlignAccount adopts the configured values verbatim — the gateway
+// only accepts assertions matching its own account row, so nothing here mints
+// ids or bumps epochs. A configured id colliding with another row fails.
 type ATHAccountStore interface {
-	EnsureAccount(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider, providerAccountID string) (ATHChannelAccount, error)
+	AlignAccount(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider string, configured ATHAccountBinding) (ATHChannelAccount, error)
 }
 
 // ValidateATHAccountInput guards the registry invariants at the store boundary.
