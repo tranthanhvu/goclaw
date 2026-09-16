@@ -69,14 +69,21 @@ func jsonbString(s string) (string, error) {
 	if err := encoder.Encode(s); err != nil {
 		return "", err
 	}
-	return strings.TrimSuffix(buf.String(), "\n"), nil
+	rendered := strings.TrimSuffix(buf.String(), "\n")
+	// Go always escapes U+2028/U+2029; Postgres jsonb::text emits them raw.
+	// The escaped six-byte form cannot collide: an input backslash before
+	// "u2028" is itself escaped to "\\u2028".
+	rendered = strings.ReplaceAll(rendered, `\u2028`, "\u2028")
+	rendered = strings.ReplaceAll(rendered, `\u2029`, "\u2029")
+	return rendered, nil
 }
 
-// CanonicalJSONB renders one entry in Postgres jsonb key order (alphabetical:
-// conversation_id, display_name, is_available, metadata; metadata keys:
-// channel_instance_id, observed_at, provider, provider_account_hint) with
-// jsonb separators (", " and ": "), so sha256 over the bytes equals the
-// gateway's digest over _entries::text.
+// CanonicalJSONB renders one entry exactly as Postgres renders the jsonb
+// value's text: keys sorted length-first then bytewise (metadata(8),
+// display_name(12), is_available(12), conversation_id(15); metadata keys:
+// provider(8), observed_at(11), channel_instance_id(19),
+// provider_account_hint(21)), separators ", " and ": ". sha256 over these
+// bytes equals the gateway's digest over _entries::text.
 func (e CatalogEntry) CanonicalJSONB() ([]byte, error) {
 	conversation, err := jsonbString(e.ConversationID)
 	if err != nil {
@@ -95,20 +102,20 @@ func (e CatalogEntry) CanonicalJSONB() ([]byte, error) {
 	}
 	observedAt := e.Metadata.ObservedAt.UTC().Format(time.RFC3339)
 	var metadata strings.Builder
-	metadata.WriteString(`{"channel_instance_id": "`)
-	metadata.WriteString(e.Metadata.ChannelInstanceID.String())
+	metadata.WriteString(`{"provider": "`)
+	metadata.WriteString(e.Metadata.Provider)
 	metadata.WriteString(`", "observed_at": "`)
 	metadata.WriteString(observedAt)
-	metadata.WriteString(`", "provider": "`)
-	metadata.WriteString(e.Metadata.Provider)
+	metadata.WriteString(`", "channel_instance_id": "`)
+	metadata.WriteString(e.Metadata.ChannelInstanceID.String())
 	metadata.WriteString(`"`)
 	if hint != "" {
 		metadata.WriteString(`, "provider_account_hint": `)
 		metadata.WriteString(hint)
 	}
 	metadata.WriteString("}")
-	return []byte(fmt.Sprintf(`{"conversation_id": %s, "display_name": %s, "is_available": %t, "metadata": %s}`,
-		conversation, display, e.IsAvailable, metadata.String())), nil
+	return []byte(fmt.Sprintf(`{"metadata": %s, "display_name": %s, "is_available": %t, "conversation_id": %s}`,
+		metadata.String(), display, e.IsAvailable, conversation)), nil
 }
 
 // CanonicalEntriesJSONB renders the array form; sha256 over the result is the

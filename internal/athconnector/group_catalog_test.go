@@ -149,11 +149,12 @@ func (f *catalogGatewayFake) handler(t *testing.T) http.HandlerFunc {
 
 func TestCatalogEntryCanonicalJSONBMatchesPostgresText(t *testing.T) {
 	observed := time.Date(2026, 9, 16, 1, 2, 3, 0, time.UTC)
+	instance := uuid.MustParse("11111111-2222-3333-4444-555555555555")
 	entry := CatalogEntry{
 		ConversationID: "group-101",
 		DisplayName:    "Nhóm A — tòa B",
 		Metadata: CatalogEntryMetadata{
-			ChannelInstanceID:   uuid.MustParse("11111111-2222-3333-4444-555555555555"),
+			ChannelInstanceID:   instance,
 			Provider:            "zalo_personal",
 			ProviderAccountHint: "account-1",
 			ObservedAt:          observed,
@@ -164,23 +165,21 @@ func TestCatalogEntryCanonicalJSONBMatchesPostgresText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(canonical)
-	for _, want := range []string{
-		`"conversation_id": "group-101"`,
-		`"display_name": "Nhóm A — tòa B"`,
-		`"is_available": true`,
-		`"metadata": {"channel_instance_id": "11111111-2222-3333-4444-555555555555"`,
-		`"observed_at": "2026-09-16T01:02:03Z"`,
-		`"provider": "zalo_personal"`,
-		`"provider_account_hint": "account-1"`,
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("canonical jsonb text missing %s: %s", want, text)
-		}
+	// Pinned byte-for-byte to Postgres jsonb::text: keys length-first then
+	// bytewise, jsonb separators (", " and ": "), raw UTF-8, RFC3339 UTC.
+	want := `{"metadata": {"provider": "zalo_personal", "observed_at": "2026-09-16T01:02:03Z", "channel_instance_id": "` +
+		instance.String() + `", "provider_account_hint": "account-1"}, "display_name": "Nhóm A — tòa B", "is_available": true, "conversation_id": "group-101"}`
+	if string(canonical) != want {
+		t.Fatalf("canonical jsonb text mismatch:\n got: %s\nwant: %s", canonical, want)
 	}
-	// Key order must be alphabetical (jsonb) and separators must be jsonb style.
-	if !strings.HasPrefix(text, `{"conversation_id":`) {
-		t.Fatalf("keys not in jsonb order: %s", text)
+	// Without the optional hint the metadata key set shrinks but the order holds.
+	entry.Metadata.ProviderAccountHint = ""
+	canonical, err = entry.CanonicalJSONB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(canonical), `"channel_instance_id": "`+instance.String()+`"}, "display_name"`) {
+		t.Fatalf("hintless metadata tail wrong: %s", canonical)
 	}
 	entries, err := CanonicalEntriesJSONB([]CatalogEntry{entry, entry})
 	if err != nil {
@@ -188,6 +187,9 @@ func TestCatalogEntryCanonicalJSONBMatchesPostgresText(t *testing.T) {
 	}
 	if !strings.Contains(string(entries), `}, {`) {
 		t.Fatalf("array separator must be jsonb style: %s", entries)
+	}
+	if string(entries) != "["+string(canonical)+", "+string(canonical)+"]" {
+		t.Fatalf("array render wrong: %s", entries)
 	}
 }
 
