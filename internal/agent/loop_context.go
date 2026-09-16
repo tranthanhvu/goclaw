@@ -148,13 +148,22 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 	// Team sessions skip seeding: members process tasks from leader, not end-user onboarding.
 	isTeamSession := bootstrap.IsTeamSession(req.SessionKey)
 	channelMeta := l.buildChannelMeta(req)
-	setup := l.getOrCreateUserSetup(ctx, req.UserID, req.Channel, isTeamSession, channelMeta)
+	var setup *userSetup
+	if req.ConnectorPolicy != nil {
+		// Connector runs resolve no user context: no seeding, no workspace
+		// resolution, no shared memory/KG/sessions/context flags. Everything
+		// downstream fails closed on the absent workspace instead of widening
+		// the scope; the policy's tool allow list denies workspace tools.
+		slog.Debug("connector run: user context disabled", "session", req.SessionKey)
+	} else {
+		setup = l.getOrCreateUserSetup(ctx, req.UserID, req.Channel, isTeamSession, channelMeta)
+	}
 
 	// Workspace resolution (layered pipeline).
 	// Layer order: tenant → team → project (future) → user/chat
 	// Two entry modes: solo agent (base = l.workspace) or team context (base = l.dataDir).
 	// Result is always a single folder set via WithToolWorkspace.
-	if l.workspace != "" && req.UserID != "" {
+	if req.ConnectorPolicy == nil && l.workspace != "" && req.UserID != "" && setup != nil {
 		ws := setup.workspace
 		if ws == "" {
 			ws = l.workspace

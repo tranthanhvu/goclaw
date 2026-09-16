@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
+
 	"context"
 	"encoding/json"
 	"sync"
@@ -635,6 +637,12 @@ type RunRequest struct {
 	ModelOverride      string             // per-request model override (heartbeat uses cheaper model)
 	ProviderOverride   providers.Provider // per-request provider override (heartbeat uses different provider)
 	LightContext       bool               // skip loading context files (only inject ExtraSystemPrompt)
+
+	// ConnectorPolicy switches the run into the restricted ATH connector mode:
+	// no user seeding, workspace resolution, shared memory/KG/sessions/context,
+	// context files, skills, memory auto-inject or flush; the tool set is
+	// exactly the policy's allow list and the response is buffered (no stream).
+	ConnectorPolicy *athconnector.RunPolicy
 
 	// Run classification
 	RunKind       string // "delegation", "announce" — empty for user-initiated runs

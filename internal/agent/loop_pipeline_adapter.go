@@ -103,7 +103,7 @@ func (l *Loop) buildPipelineDeps(req *RunRequest, bridgeRS *runState) pipeline.P
 
 		// V3 auto-inject: episodic memory L0 injection into system prompt.
 		// Captures agent/tenant context via closure for store scoping.
-		AutoInject: l.makeAutoInjectCallback(req),
+		AutoInject: autoInjectFor(req, l),
 
 		// Context injection + session history
 		InjectContext:      cb.injectContext,
@@ -281,6 +281,15 @@ func convertRunResult(pr *pipeline.RunResult) *RunResult {
 		LastBlockReply: pr.LastBlockReply,
 		LoopKilled:     pr.LoopKilled,
 	}
+}
+
+// autoInjectFor disables memory auto-injection for connector runs: scoped
+// runs never widen their context with retrieval outside the live scope.
+func autoInjectFor(req *RunRequest, l *Loop) func(ctx context.Context, userMessage, userID, recentContext string) (string, error) {
+	if req.ConnectorPolicy != nil {
+		return nil
+	}
+	return l.makeAutoInjectCallback(req)
 }
 
 // makeAutoInjectCallback creates the AutoInject callback that captures agent/tenant context.

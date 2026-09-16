@@ -2,6 +2,8 @@ package channels
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -57,4 +59,46 @@ func ConnectorHarnessFactoryFor(mcpStore store.MCPServerStore, accounts store.AT
 		}
 		return nil, nil
 	}
+}
+
+// ConnectorRunCoordinatorFor builds the process-level run coordinator from
+// the enabled ATH connector registration. The display name carried into
+// onboarding hints is the MCP entry's own display name.
+func ConnectorRunCoordinatorFor(ctx context.Context, mcpStore store.MCPServerStore) (*athconnector.RunCoordinator, error) {
+	if mcpStore == nil {
+		return nil, nil
+	}
+	listCtx := store.WithCrossTenant(store.WithTenantID(ctx, store.MasterTenantID))
+	servers, err := mcpStore.ListServers(listCtx)
+	if err != nil {
+		return nil, err
+	}
+	for _, srv := range servers {
+		if !srv.Enabled {
+			continue
+		}
+		registration, err := athconnector.ParseRegistration(srv.Settings)
+		if err != nil || registration == nil {
+			continue
+		}
+		cfg := registration.Config()
+		key, err := athconnector.LoadPrivateKey(cfg.PrivateKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		signer := athconnector.NewSigner(cfg.Issuer, cfg.Environment, cfg.KeyID, key, time.Now)
+		if signer == nil {
+			return nil, errors.New("connector run coordinator: signer construction failed")
+		}
+		client, err := athconnector.NewControlClient(cfg, signer)
+		if err != nil {
+			return nil, err
+		}
+		displayName := srv.DisplayName
+		if displayName == "" {
+			displayName = srv.Name
+		}
+		return athconnector.NewRunCoordinator(client, registration.AccountBinding(), registration.Purpose, displayName)
+	}
+	return nil, nil
 }

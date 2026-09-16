@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/channels"
 	"github.com/nextlevelbuilder/goclaw/internal/channels/telegram/voiceguard"
@@ -79,6 +80,39 @@ func processNormalMessage(
 		fmt.Sscanf(msg.Metadata[tools.MetaDMThreadID], "%d", &threadID)
 		if threadID > 0 {
 			sessionKey = sessions.BuildDMThreadSessionKey(agentID, msg.Channel, msg.ChatID, threadID)
+		}
+	}
+
+	// ATH connector runs: resolve the live scope before any historical or
+	// business context loads. Failures drop the message — never fall through
+	// to a generic agent run for a trusted-origin event.
+	var connectorPolicy *athconnector.RunPolicy
+	if msg.TrustedOrigin != nil {
+		if deps.ConnectorRuns == nil {
+			slog.Warn("connector: message without connector runtime; dropping (fail closed)", "channel", msg.Channel)
+			return
+		}
+		decision, err := deps.ConnectorRuns.Resolve(ctx, msg.TrustedOrigin)
+		if err != nil {
+			slog.Warn("connector: scope resolution failed; dropping (fail closed)", "error", err)
+			return
+		}
+		if decision.Denied {
+			deps.MsgBus.PublishOutbound(bus.OutboundMessage{
+				Channel: msg.Channel, ChatID: msg.ChatID, Content: decision.Reply,
+				Metadata: msg.Metadata, TenantID: msg.TenantID,
+			})
+			return
+		}
+		connectorPolicy = decision.Policy
+		sessionKey = decision.Policy.ScopeKey
+		if !decision.Policy.DataFree {
+			// Issue the scope credential up front so every delivery can
+			// revalidate against the live scope.
+			if _, err := deps.ConnectorRuns.Credential(ctx, decision.Policy); err != nil {
+				slog.Warn("connector: credential unavailable; dropping (fail closed)", "error", err)
+				return
+			}
 		}
 	}
 
@@ -454,6 +488,15 @@ func processNormalMessage(
 	// upstream dispatch set MetaOriginRole.
 	effectiveRole := msg.Metadata[tools.MetaOriginRole]
 
+	runToolAllow, runSkillFilter, runLightContext, runExtraPrompt, runStream := msg.ToolAllow, skillFilter, false, extraPrompt, providerStream
+	if connectorPolicy != nil {
+		runToolAllow = connectorPolicy.ToolAllow()
+		runSkillFilter = []string{}
+		runLightContext = true
+		runExtraPrompt = connectorPolicy.Prompt
+		runStream = false // connector responses are buffered, never streamed
+	}
+
 	// Schedule through main lane (per-session concurrency controlled by maxConcurrent)
 	outCh := deps.Sched.ScheduleWithOpts(schedCtx, "main", agent.RunRequest{
 		SessionKey:   sessionKey,
@@ -476,17 +519,19 @@ func processNormalMessage(
 		Role:               effectiveRole,
 		SenderName:         resolveSenderName(msg),
 		RunID:              runID,
-		Stream:             providerStream,
+		Stream:             runStream,
 		HistoryLimit:       msg.HistoryLimit,
-		ToolAllow:          msg.ToolAllow,
-		ExtraSystemPrompt:  extraPrompt,
-		SkillFilter:        skillFilter,
+		ToolAllow:          runToolAllow,
+		ExtraSystemPrompt:  runExtraPrompt,
+		SkillFilter:        runSkillFilter,
+		LightContext:       runLightContext,
+		ConnectorPolicy:    connectorPolicy,
 	}, scheduler.ScheduleOpts{
 		MaxConcurrent: maxConcurrent,
 	})
 
 	// Handle result asynchronously to not block the flush callback.
-	go func(agentKey, channel, chatID, session, rID, peerKind, inboundContent string, meta map[string]string, blockReplyEnabled bool, chatBehavior channels.ResolvedChatBehavior, streaming bool, ptd *tools.PendingTeamDispatch, tenantID, agentUUID uuid.UUID, agentOtherConfig []byte) {
+	go func(agentKey, channel, chatID, session, rID, peerKind, inboundContent string, meta map[string]string, blockReplyEnabled bool, chatBehavior channels.ResolvedChatBehavior, streaming bool, ptd *tools.PendingTeamDispatch, tenantID, agentUUID uuid.UUID, agentOtherConfig []byte, policy *athconnector.RunPolicy) {
 		outcome := <-outCh
 
 		// Release team create lock — tasks already visible in DB, other goroutines can list.
@@ -591,6 +636,25 @@ func processNormalMessage(
 			deps.Cfg.Channels.Telegram.AudioGuardErrorMarkers,
 		)
 
+		// Connector delivery guard: revalidate the live scope right before the
+		// final destination-bound delivery. A revoked or remapped scope never
+		// releases business content; only the indicator cleanup goes out.
+		if policy != nil && !policy.DataFree && deps.ConnectorRuns != nil {
+			cred, credErr := deps.ConnectorRuns.Credential(ctx, policy)
+			valid := false
+			if credErr == nil {
+				valid, credErr = deps.ConnectorRuns.Revalidate(ctx, policy, cred.CredentialID)
+			}
+			if credErr != nil || !valid {
+				slog.Warn("connector: scope invalid before delivery; dropping business content", "run_id", rID, "error", credErr)
+				deps.MsgBus.PublishOutbound(bus.OutboundMessage{
+					Channel: channel, ChatID: chatID, Content: "",
+					Metadata: meta, TenantID: tenantID, AgentID: agentUUID,
+				})
+				return
+			}
+		}
+
 		// Publish response back to the channel
 		outMsg := bus.OutboundMessage{
 			Channel:          channel,
@@ -624,7 +688,7 @@ func processNormalMessage(
 		if deps.TeamStore != nil && channel != tools.ChannelSystem && channel != tools.ChannelTeammate && channel != tools.ChannelDashboard {
 			go autoSetFollowup(ctx, deps.TeamStore, deps.AgentStore, agentKey, channel, chatID, replyContent)
 		}
-	}(agentID, msg.Channel, msg.ChatID, sessionKey, runID, peerKind, msg.Content, outMeta, blockReply, chatBehavior, channelStream, ptd, msg.TenantID, agentLoop.UUID(), agentLoop.OtherConfig())
+	}(agentID, msg.Channel, msg.ChatID, sessionKey, runID, peerKind, msg.Content, outMeta, blockReply, chatBehavior, channelStream, ptd, msg.TenantID, agentLoop.UUID(), agentLoop.OtherConfig(), connectorPolicy)
 }
 
 func buildDeliveryRuntime(ctx context.Context, deps *ConsumerDeps, agentLoop agent.Agent, behavior channels.ResolvedChatBehavior, msg bus.InboundMessage, userID, peerKind, channelType, agentKey string) channels.DeliveryRuntime {

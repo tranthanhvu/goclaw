@@ -531,6 +531,7 @@ func runGateway() {
 
 	// Load channel instances from DB.
 	var instanceLoader *channels.InstanceLoader
+	var connectorRunCoordinator *athconnector.RunCoordinator
 	if pgStores.ChannelInstances != nil {
 		instanceLoader = channels.NewInstanceLoader(pgStores.ChannelInstances, pgStores.Agents, channelMgr, msgBus, pgStores.Pairing)
 		instanceLoader.SetProviderRegistry(providerRegistry)
@@ -548,6 +549,12 @@ func runGateway() {
 		// operator-registered MCP entry; the generic gateway stays unarmed.
 		if cfg.Gateway.RuntimeRole == string(athconnector.RuntimeRoleConnector) && pgStores.MCP != nil && pgStores.ATHAccounts != nil {
 			instanceLoader.SetConnectorHarnessFactory(channels.ConnectorHarnessFactoryFor(pgStores.MCP, pgStores.ATHAccounts))
+			coordinator, coordErr := channels.ConnectorRunCoordinatorFor(context.Background(), pgStores.MCP)
+			if coordErr != nil {
+				slog.Warn("connector run coordinator unavailable; scoped runs disabled (fail closed)", "error", coordErr)
+			} else if coordinator != nil {
+				connectorRunCoordinator = coordinator
+			}
 			slog.Info("gateway connector role armed", "runtime_role", cfg.Gateway.RuntimeRole)
 		}
 		instanceLoader.RegisterFactory(channels.TypePancake, pancake.Factory)
@@ -727,6 +734,7 @@ func runGateway() {
 		postTurn:          postTurn,
 		subagentMgr:       subagentMgr,
 		consumerTeamStore: consumerTeamStore,
+		connectorRuns:     connectorRunCoordinator,
 		auditCh:           auditCh,
 		sigCh:             sigCh,
 	})

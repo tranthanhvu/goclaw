@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
+
 	"sync"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
@@ -35,4 +37,5 @@ type ConsumerDeps struct {
 	PostConversation *postConversationReporter
 	BgWg             sync.WaitGroup
 	GetAnnounceMu    func(string) *sync.Mutex
+	ConnectorRuns    *athconnector.RunCoordinator
 }

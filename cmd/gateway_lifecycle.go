@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
+
 	"context"
 	"log/slog"
 	"os"
@@ -33,6 +35,7 @@ type lifecycleDeps struct {
 	postTurn          tools.PostTurnProcessor
 	subagentMgr       *tools.SubagentManager
 	consumerTeamStore store.TeamStore
+	connectorRuns     *athconnector.RunCoordinator
 	auditCh           chan bus.AuditEventPayload
 	sigCh             chan os.Signal
 }
@@ -147,7 +150,7 @@ func (d *gatewayDeps) runLifecycle(
 		d.channelMgr.SetContactCollector(contactCollector)
 	}
 
-	go consumeInboundMessages(ctx, d.msgBus, d.agentRouter, d.cfg, deps.sched, d.channelMgr, deps.consumerTeamStore, deps.quotaChecker, d.pgStores.Sessions, d.pgStores.Agents, contactCollector, deps.postTurn, deps.subagentMgr, d.usageCapSvc, d.providerRegistry)
+	go consumeInboundMessages(ctx, d.msgBus, d.agentRouter, d.cfg, deps.sched, d.channelMgr, deps.consumerTeamStore, deps.quotaChecker, d.pgStores.Sessions, d.pgStores.Agents, contactCollector, deps.postTurn, deps.subagentMgr, d.usageCapSvc, d.providerRegistry, deps.connectorRuns)
 
 	// Webhook callback worker — delivers async webhook_calls rows to receiver callback_url.
 	// Runs in both editions: Standard (PG, concurrency=4) and Lite (SQLite, concurrency=1).
