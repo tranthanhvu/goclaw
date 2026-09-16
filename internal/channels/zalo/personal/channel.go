@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -29,8 +30,10 @@ type Channel struct {
 	listener *protocol.Listener
 
 	// Pre-loaded credentials (from DB or from file/QR as fallback).
-	preloadedCreds  *protocol.Credentials
-	connectorIntake athconnector.GroupIntake // ATH restricted onboarding intake; nil in the generic runtime
+	preloadedCreds   *protocol.Credentials
+	connectorIntake  athconnector.GroupIntake         // ATH restricted onboarding intake; nil in the generic runtime
+	connectorHarness *athconnector.Harness            // loader-injected enablement; armed at Start once the account is verified
+	connectorCatalog *athconnector.GroupCatalogWorker // joined-group catalog refresh; stopped with the channel
 
 	stopCh   chan struct{}
 	stopOnce sync.Once
@@ -40,6 +43,11 @@ type Channel struct {
 // the isolated connector service assembly before Start; the generic runtime
 // never sets it.
 func (c *Channel) SetGroupIntake(intake athconnector.GroupIntake) { c.connectorIntake = intake }
+
+// SetConnectorHarness installs the loader-provided connector enablement. The
+// restricted intake and catalog worker stay inert until Start verifies the
+// provider account.
+func (c *Channel) SetConnectorHarness(h *athconnector.Harness) { c.connectorHarness = h }
 
 // New creates a new Zalo Personal channel from config.
 func New(cfg config.ZaloPersonalConfig, msgBus *bus.MessageBus, pairingSvc store.PairingStore, pendingStore store.PendingMessageStore) (*Channel, error) {
@@ -123,6 +131,27 @@ func (c *Channel) Start(ctx context.Context) error {
 	c.listener = ln
 	c.mu.Unlock()
 
+	// Arm the ATH restricted intake and the group catalog worker now that the
+	// provider account identity is verified. Any failure leaves them unarmed:
+	// denied groups keep falling through generic policy instead of trusting
+	// unproven provenance, and refresh jobs wait for the next start.
+	if c.connectorHarness != nil {
+		if intake, err := c.connectorHarness.ArmGroupIntake(ctx, c.TenantID(), c.ChannelInstanceID(), channels.TypeZaloPersonal, sess.UID); err != nil {
+			slog.Warn("zalo_personal connector intake not armed (fail closed)", "uid", sess.UID, "error", err)
+		} else {
+			c.SetGroupIntake(intake)
+			slog.Info("zalo_personal connector intake armed", "uid", sess.UID, "instance", c.ChannelInstanceID())
+		}
+		workerID := "zalo-personal:" + c.ChannelInstanceID().String()
+		if worker, err := c.connectorHarness.ArmCatalogWorker(ctx, c.TenantID(), c.ChannelInstanceID(), channels.TypeZaloPersonal, sess.UID, workerID, zaloCatalogSource{channel: c}, 15*time.Second); err != nil {
+			slog.Warn("zalo_personal connector catalog worker not armed (fail closed)", "uid", sess.UID, "error", err)
+		} else {
+			c.connectorCatalog = worker
+			worker.Start()
+			slog.Info("zalo_personal connector catalog worker armed", "uid", sess.UID, "instance", c.ChannelInstanceID())
+		}
+	}
+
 	slog.Info("zalo_personal connected", "uid", sess.UID)
 
 	c.SetRunning(true)
@@ -162,6 +191,9 @@ func (c *Channel) Stop(_ context.Context) error {
 	})
 	if ln := c.getListener(); ln != nil {
 		ln.Stop()
+	}
+	if c.connectorCatalog != nil {
+		c.connectorCatalog.Stop()
 	}
 	c.SetRunning(false)
 	return nil

@@ -328,6 +328,8 @@ func (l *InstanceLoader) loadInstance(ctx context.Context, inst store.ChannelIns
 		} else if harness != nil {
 			if base, ok := ch.(interface{ SetConnectorHarness(*athconnector.Harness) }); ok {
 				base.SetConnectorHarness(harness)
+			} else {
+				slog.Warn("channel type cannot accept a connector harness; intake stays unarmed", "name", inst.Name, "type", inst.ChannelType)
 			}
 		}
 	}

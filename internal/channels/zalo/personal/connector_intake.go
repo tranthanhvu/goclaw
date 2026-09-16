@@ -125,3 +125,33 @@ func (c *Channel) sendOnboardingReply(threadID string, result *athconnector.Appr
 		slog.Warn("zalo_personal onboarding reply failed", "group_id", threadID, "error", err)
 	}
 }
+
+// zaloCatalogSource adapts the authenticated zalo session to the connector
+// catalog worker: the joined-group list comes from the provider's own group
+// service, never from chat history or pairing state.
+type zaloCatalogSource struct {
+	channel *Channel
+}
+
+// FetchJoinedGroups returns the account's joined groups with availability.
+// TotalMember > 0 means the account still participates; entries for groups
+// the account left never appear because the provider does not list them.
+func (s zaloCatalogSource) FetchJoinedGroups(ctx context.Context) ([]athconnector.CatalogGroup, error) {
+	sess := s.channel.session()
+	if sess == nil || sess.UID == "" {
+		return nil, errors.New("zalo_personal: authenticated session unavailable for catalog refresh")
+	}
+	groups, err := protocol.FetchGroups(ctx, sess)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]athconnector.CatalogGroup, 0, len(groups))
+	for _, group := range groups {
+		out = append(out, athconnector.CatalogGroup{
+			ConversationID: group.GroupID,
+			DisplayName:    group.Name,
+			Available:      group.TotalMember > 0,
+		})
+	}
+	return out, nil
+}

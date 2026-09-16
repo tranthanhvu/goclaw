@@ -57,25 +57,44 @@ func NewHarness(cfg Config, purpose OnboardingPurpose, hints ApprovalHints, acco
 // stable identity on first login, bumping the epoch on re-login). It fails
 // closed on any error: the caller must leave the restricted intake unarmed.
 func (h *Harness) ArmGroupIntake(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider, providerAccountID string) (GroupIntake, error) {
-	key, err := LoadPrivateKey(h.cfg.PrivateKeyFile)
+	client, binding, err := h.arm(ctx, tenantID, channelInstanceID, provider, providerAccountID)
 	if err != nil {
 		return nil, err
+	}
+	return NewGroupIntake(client, binding, h.purpose, h.hints)
+}
+
+// ArmCatalogWorker arms the group catalog refresh worker for the same
+// verified login. The poll interval bounds idle claim attempts; source is the
+// channel adapter over the authenticated provider session.
+func (h *Harness) ArmCatalogWorker(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider, providerAccountID, workerID string, source GroupCatalogSource, poll time.Duration) (*GroupCatalogWorker, error) {
+	client, binding, err := h.arm(ctx, tenantID, channelInstanceID, provider, providerAccountID)
+	if err != nil {
+		return nil, err
+	}
+	return NewGroupCatalogWorker(client, binding, source, channelInstanceID, provider, workerID, poll)
+}
+
+// arm builds the control client and the current account binding.
+func (h *Harness) arm(ctx context.Context, tenantID, channelInstanceID uuid.UUID, provider, providerAccountID string) (*ControlClient, AccountBinding, error) {
+	key, err := LoadPrivateKey(h.cfg.PrivateKeyFile)
+	if err != nil {
+		return nil, AccountBinding{}, err
 	}
 	signer := NewSigner(h.cfg.Issuer, h.cfg.Environment, h.cfg.KeyID, key, h.now)
 	if signer == nil {
-		return nil, errors.New("athconnector: signer construction failed")
+		return nil, AccountBinding{}, errors.New("athconnector: signer construction failed")
 	}
 	client, err := NewControlClient(h.cfg, signer)
 	if err != nil {
-		return nil, err
+		return nil, AccountBinding{}, err
 	}
 	account, err := h.accounts.EnsureAccount(ctx, tenantID, channelInstanceID, provider, providerAccountID)
 	if err != nil {
-		return nil, fmt.Errorf("athconnector: account registration failed: %w", err)
+		return nil, AccountBinding{}, fmt.Errorf("athconnector: account registration failed: %w", err)
 	}
 	if account.ProviderAccountID != providerAccountID || account.AccountEpoch < 1 {
-		return nil, errors.New("athconnector: account registry returned an inconsistent binding")
+		return nil, AccountBinding{}, errors.New("athconnector: account registry returned an inconsistent binding")
 	}
-	binding := AccountBinding{AccountID: account.ID, ProviderAccountID: account.ProviderAccountID, AccountEpoch: account.AccountEpoch}
-	return NewGroupIntake(client, binding, h.purpose, h.hints)
+	return client, AccountBinding{AccountID: account.ID, ProviderAccountID: account.ProviderAccountID, AccountEpoch: account.AccountEpoch}, nil
 }
