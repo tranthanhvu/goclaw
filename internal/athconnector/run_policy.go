@@ -31,6 +31,7 @@ const ScopedPrompt = "You answer only with the access granted to this group. Use
 type RunPolicy struct {
 	Scope    *RunScope
 	Origin   *Origin
+	Binding  AccountBinding
 	ScopeKey string
 	// DataFree marks every status except approved.
 	DataFree bool
@@ -40,6 +41,9 @@ type RunPolicy struct {
 	Prompt string
 	// CredentialCache is non-nil only for approved scopes.
 	CredentialCache *ScopeClientCache
+	// Requester submits onboarding requests for the local tool; the runtime
+	// sets it, the model never can.
+	Requester OnboardingRequester
 }
 
 // ToolAllow returns the exclusive tool allow list for the run.
@@ -104,12 +108,14 @@ func (r *RunCoordinator) Resolve(ctx context.Context, origin *Origin) (*Coordina
 		Policy: &RunPolicy{
 			Scope:    scope,
 			Origin:   origin,
+			Binding:  r.binding,
 			ScopeKey: scopeKey,
 			DataFree: dataFree,
 			Tools:    tools,
 			Prompt:   ScopedPrompt,
 		},
 	}
+	decision.Policy.Requester = r.Requester()
 	if dataFree {
 		decision.Policy.Prompt = DataFreePrompt
 	}
@@ -149,4 +155,21 @@ func (r *RunCoordinator) Revalidate(ctx context.Context, policy *RunPolicy, cred
 	}
 	valid, _, err := r.client.RevalidateScope(ctx, r.binding, policy.Origin, policy.Scope.ContextID, credentialID)
 	return valid, err
+}
+
+// runPolicyKey carries the connector run policy through the tool-execution
+// context; only the runtime sets it.
+type runPolicyCtxKey struct{}
+
+// WithRunPolicy attaches the connector run policy to the context so the local
+// onboarding tool can act with runtime-supplied identity.
+func WithRunPolicy(ctx context.Context, policy *RunPolicy) context.Context {
+	return context.WithValue(ctx, runPolicyCtxKey{}, policy)
+}
+
+// RunPolicyFromContext returns the connector run policy, or nil outside
+// connector runs (the local tool fails closed then).
+func RunPolicyFromContext(ctx context.Context) *RunPolicy {
+	policy, _ := ctx.Value(runPolicyCtxKey{}).(*RunPolicy)
+	return policy
 }

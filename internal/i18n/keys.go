@@ -377,7 +377,9 @@ const (
 	MsgConnectorRegistrationInvalid    = "error.connector_registration_invalid"      // "invalid ATH connector registration: %s"
 
 	// ATH connector onboarding replies (zalo personal restricted intake).
-	MsgConnectorOnboardingSubmitted = "connector.onboarding.submitted" // "Your request has been sent to the admin."
-	MsgConnectorOnboardingPending   = "connector.onboarding.pending"   // "Your request is awaiting admin approval."
-	MsgConnectorOnboardingApproved  = "connector.onboarding.approved"  // "This group is approved. Please send your question again."
+	MsgConnectorOnboardingSubmitted   = "connector.onboarding.submitted"   // "Your request has been sent to the admin."
+	MsgConnectorOnboardingPending     = "connector.onboarding.pending"     // "Your request is awaiting admin approval."
+	MsgConnectorOnboardingApproved    = "connector.onboarding.approved"    // "This group is approved. Please send your question again."
+	MsgConnectorOnboardingDenied      = "connector.onboarding.denied"      // "Access for this group is not granted."
+	MsgConnectorOnboardingUnconfirmed = "connector.onboarding.unconfirmed" // "The request could not be confirmed as sent. Please try again."
 )

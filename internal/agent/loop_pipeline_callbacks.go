@@ -209,18 +209,26 @@ func (l *Loop) makeBuildFilteredTools(req *RunRequest) func(state *pipeline.RunS
 		// which break per-user MCP credential lookup. ChannelType discriminates
 		// Bitrix24 (always prefer SenderID) from other channels (group-only
 		// rewrite recovery). See resolveActorUserID docstring for full rationale.
-		actorUserID := resolveActorUserID(
-			state.Input.UserID,
-			state.Input.SenderID,
-			state.Input.PeerKind,
-			state.Input.ChannelType,
-		)
-		userTools := l.getUserMCPTools(state.Ctx, actorUserID)
+		var userTools []tools.Tool
+		if req.ConnectorPolicy != nil {
+			// Connector runs never use actor-keyed credentials: the scoped
+			// MCP client carries the immutable scope credential, and any
+			// failure leaves the run without business tools (fail closed).
+			userTools = l.getConnectorMCPTools(state.Ctx, req.ConnectorPolicy)
+		} else {
+			actorUserID := resolveActorUserID(
+				state.Input.UserID,
+				state.Input.SenderID,
+				state.Input.PeerKind,
+				state.Input.ChannelType,
+			)
+			userTools = l.getUserMCPTools(state.Ctx, actorUserID)
+		}
 		slog.Debug("mcp.user_tools_context",
 			"peer_kind", state.Input.PeerKind,
 			"input_user_id", state.Input.UserID,
 			"sender_id", state.Input.SenderID,
-			"actor_user_id", actorUserID,
+			"connector_run", req.ConnectorPolicy != nil,
 			"user_tools_count", len(userTools))
 		maxIter := l.maxIterations
 		if req.MaxIterations > 0 && req.MaxIterations < maxIter {

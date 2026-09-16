@@ -141,11 +141,12 @@ type Loop struct {
 	userSetups        sync.Map            // userID → *userSetup (workspace + seeding state, per Loop instance)
 
 	// Per-user MCP tools: servers requiring user credentials get connected per-request.
-	mcpStore        store.MCPServerStore   // for credential lookup
-	mcpPool         *mcpbridge.Pool        // user-keyed connection pool
-	mcpUserCredSrvs []store.MCPAccessInfo  // servers needing per-user creds
-	mcpUserTools    sync.Map               // userID → []tools.Tool (cached per-user tools)
-	mcpGrantChecker mcpbridge.GrantChecker // runtime grant verification (nil = skip)
+	mcpStore          store.MCPServerStore   // for credential lookup
+	mcpPool           *mcpbridge.Pool        // user-keyed connection pool
+	mcpUserCredSrvs   []store.MCPAccessInfo  // servers needing per-user creds
+	mcpUserTools      sync.Map               // userID → []tools.Tool (cached per-user tools)
+	connectorMCPTools sync.Map               // scope key → connectorScopedTools (scoped MCP bridge tools)
+	mcpGrantChecker   mcpbridge.GrantChecker // runtime grant verification (nil = skip)
 
 	// Compaction config (memory flush settings)
 	compactionCfg *config.CompactionConfig

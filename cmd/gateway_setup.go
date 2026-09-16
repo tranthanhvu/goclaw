@@ -53,6 +53,12 @@ func setupToolRegistry(
 ) {
 	// Create tool registry with all tools
 	toolsReg = tools.NewRegistry()
+	// Connector-role runtime only: the local ATH onboarding tool. Generic
+	// deployments never register it, and its execution fails closed without a
+	// runtime-attached connector policy.
+	if cfg != nil && cfg.Gateway.RuntimeRole == "connector" {
+		toolsReg.Register(tools.ATHOnboardingTool{})
+	}
 	agentCfg = cfg.ResolveAgent("default")
 
 	// Sandbox manager (optional — routes tools through Docker containers)

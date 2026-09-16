@@ -2,12 +2,17 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"maps"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
 	mcpbridge "github.com/nextlevelbuilder/goclaw/internal/mcp"
+	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
 
@@ -268,4 +273,80 @@ func (l *Loop) executeToolForActor(
 		}
 	}
 	return l.tools.ExecuteWithContext(ctx, name, args, channel, chatID, peerKind, sessionKey, nil)
+}
+
+// connectorScopedTools caches one scope's MCP bridge tools together with the
+// credential identity they were built with; a rotation invalidates them.
+type connectorScopedTools struct {
+	credentialID uuid.UUID
+	tools        []tools.Tool
+}
+
+// getConnectorMCPTools builds the scoped MCP bridge tools for an approved
+// connector run. The connection is pool-keyed by the credential identity, so
+// rotation acquires a fresh immutable client instead of mutating headers, and
+// no actor-keyed credential path is ever consulted. Any failure returns nil:
+// the run continues without business tools (fail closed).
+func (l *Loop) getConnectorMCPTools(ctx context.Context, policy *athconnector.RunPolicy) []tools.Tool {
+	if policy == nil || policy.DataFree || policy.CredentialCache == nil || policy.Origin == nil {
+		return nil
+	}
+	if l.mcpStore == nil || l.mcpPool == nil {
+		return nil
+	}
+	cred, err := policy.CredentialCache.Credential(ctx, policy.ScopeKey, policy.Binding, policy.Origin, policy.Scope)
+	if err != nil {
+		slog.Warn("connector.mcp_credential_unavailable", "scope", policy.ScopeKey, "error", err)
+		return nil
+	}
+	if cached, ok := l.connectorMCPTools.Load(policy.ScopeKey); ok {
+		if entry, ok := cached.(*connectorScopedTools); ok && entry.credentialID == cred.CredentialID {
+			return entry.tools
+		}
+	}
+	servers, err := l.mcpStore.ListServers(ctx)
+	if err != nil {
+		slog.Warn("connector.mcp_servers_unavailable", "error", err)
+		return nil
+	}
+	var srv *store.MCPServerData
+	for i := range servers {
+		candidate := servers[i]
+		if candidate.Enabled && athconnector.IsConnectorSettings(candidate.Settings) {
+			srv = &candidate
+			break
+		}
+	}
+	if srv == nil {
+		slog.Warn("connector.mcp_server_missing", "scope", policy.ScopeKey)
+		return nil
+	}
+	var args []string
+	if len(srv.Args) > 0 {
+		_ = json.Unmarshal(srv.Args, &args)
+	}
+	env := mcpbridge.ParseJSONBytesToStringMap(srv.Env)
+	if env == nil {
+		env = map[string]string{}
+	}
+	headers := map[string]string{"Authorization": "Bearer " + cred.Secret}
+	poolKey := "athscope:" + cred.CredentialID.String()
+	entry, err := l.mcpPool.AcquireUser(ctx, l.tenantID, srv.Name, poolKey,
+		srv.Transport, srv.Command, args, env, srv.URL, headers, srv.TimeoutSec)
+	if err != nil {
+		slog.Warn("connector.mcp_pool_acquire_failed", "server", srv.Name, "scope", policy.ScopeKey, "error", err)
+		return nil
+	}
+	l.mcpPool.ReleaseUser(mcpbridge.UserPoolKey(l.tenantID, srv.Name, poolKey))
+	hints := mcpbridge.ParseToolHints(srv.Settings)
+	var scoped []tools.Tool
+	for _, mcpTool := range entry.MCPTools() {
+		bt := mcpbridge.NewBridgeTool(srv.Name, mcpTool, entry.ClientPtr(), srv.ToolPrefix, srv.TimeoutSec, entry.Connected(), srv.ID, l.mcpGrantChecker).
+			WithHints(hints.Global, hints.HintFor(mcpTool.Name)).
+			WithForceReconnect(entry.RequestForceReconnect())
+		scoped = append(scoped, bt)
+	}
+	l.connectorMCPTools.Store(policy.ScopeKey, &connectorScopedTools{credentialID: cred.CredentialID, tools: scoped})
+	slog.Info("connector.mcp_tools_loaded", "server", srv.Name, "scope", policy.ScopeKey, "tools", len(scoped))
+	return scoped
 }

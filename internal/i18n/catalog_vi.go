@@ -373,5 +373,8 @@ func init() {
 		// ATH connector registration guards
 		MsgConnectorRegistrationForbidden: "ATH connector registration requires operator or admin role",
 		MsgConnectorRegistrationInvalid:   "đăng ký ATH connector không hợp lệ: %s",
+
+		MsgConnectorOnboardingDenied:      "Nhóm chưa được cấp quyền.",
+		MsgConnectorOnboardingUnconfirmed: "Chưa xác nhận được yêu cầu đã gửi. Bạn hãy thử lại ạ.",
 	})
 }

@@ -156,3 +156,21 @@ func (r *ControlRequester) RequestAccess(ctx context.Context, origin *Origin, ev
 	}
 	return r.Client.SubmitApprovalRequest(ctx, r.Binding, origin, eventKey, r.Purpose, approvalHints)
 }
+
+// RunOnboardingForPolicy executes one onboarding submission for a connector
+// run. Identity comes exclusively from the runtime policy; the event key is
+// stable per run (the trusted provider message), so retries are idempotent at
+// the gateway.
+func RunOnboardingForPolicy(ctx context.Context, policy *RunPolicy, hints OnboardingToolInput) (OnboardingOutcome, *ApprovalRequestResult, error) {
+	if policy == nil || policy.Requester == nil || policy.Origin == nil {
+		return AckUnconfirmed, nil, errors.New("athconnector: no onboarding capability for this run")
+	}
+	if err := ValidateOnboardingHints(hints); err != nil {
+		return AckUnconfirmed, nil, err
+	}
+	result, err := policy.Requester.RequestAccess(ctx, policy.Origin, OnboardingEventKey(policy.Origin.ProviderMessageID()), hints)
+	if err != nil {
+		return AckUnconfirmed, nil, err
+	}
+	return ResolveAcknowledgment(result), result, nil
+}

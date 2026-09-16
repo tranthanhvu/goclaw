@@ -373,5 +373,8 @@ func init() {
 		// ATH connector registration guards
 		MsgConnectorRegistrationForbidden: "ATH connector registration requires operator or admin role",
 		MsgConnectorRegistrationInvalid:   "ATH 连接器注册无效：%s",
+
+		MsgConnectorOnboardingDenied:      "该群组未获授权。",
+		MsgConnectorOnboardingUnconfirmed: "无法确认请求已发送，请重试。",
 	})
 }

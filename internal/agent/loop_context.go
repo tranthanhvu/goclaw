@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -146,6 +148,9 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 	// Uses userSetups sync.Map to track both concerns atomically per user.
 	// Seeding must run before buildMessages→resolveContextFiles reads context files.
 	// Team sessions skip seeding: members process tasks from leader, not end-user onboarding.
+	if req.ConnectorPolicy != nil {
+		ctx = athconnector.WithRunPolicy(ctx, req.ConnectorPolicy)
+	}
 	isTeamSession := bootstrap.IsTeamSession(req.SessionKey)
 	channelMeta := l.buildChannelMeta(req)
 	var setup *userSetup
