@@ -202,7 +202,9 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 			effectiveWorkspace = l.workspace
 		}
 		ctx = tools.WithToolWorkspace(ctx, effectiveWorkspace)
-	} else if l.workspace != "" {
+	} else if l.workspace != "" && req.ConnectorPolicy == nil {
+		// Connector runs carry no workspace at all: the shared system root is
+		// not a fallback for them, tools that need one are denied by policy.
 		ctx = tools.WithToolWorkspace(ctx, l.workspace)
 	}
 

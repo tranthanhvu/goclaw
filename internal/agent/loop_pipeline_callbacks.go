@@ -53,7 +53,7 @@ func (l *Loop) pipelineCallbacks(req *RunRequest, bridgeRS *runState) pipelineCa
 		pruneMessages:      l.makePruneMessages(),
 		sanitizeHistory:    sanitizeHistory,
 		compactMessages:    l.makeCompactMessages(req),
-		runMemoryFlush:     l.makeRunMemoryFlush(),
+		runMemoryFlush:     makeRunMemoryFlushFor(req, l),
 		executeToolCall:    l.makeExecuteToolCall(req, bridgeRS),
 		executeToolRaw:     l.makeExecuteToolRaw(req),
 		processToolResult:  l.makeProcessToolResult(req, bridgeRS),
@@ -299,6 +299,11 @@ func (l *Loop) makeAuthorizeToolCall() func(ctx context.Context, state *pipeline
 		}
 
 		// Preserve lazy activation for deferred tools (typically per-user MCP).
+		// Connector runs never activate deferred tools: the allowlist is the
+		// whole guarantee, and deferred activation admits by exact name.
+		if allowed["__connector_run__"] {
+			return false, "connector runs cannot activate deferred tools: " + name
+		}
 		if l.tools != nil && l.tools.TryActivateDeferred(name) {
 			// Re-check deny policy to prevent a lazy-activated tool from bypassing
 			// an explicit deny rule.
@@ -601,7 +606,13 @@ func (l *Loop) markCacheTouched(sessionKey string) {
 	l.cacheTouchBySession.Store(sessionKey, time.Now())
 }
 
-func (l *Loop) makeRunMemoryFlush() func(ctx context.Context, state *pipeline.RunState) error {
+// makeRunMemoryFlushFor disables memory flush for connector runs: the flush
+// turn would summarize scoped business history into agent-level memory and
+// execute with the full ungated tool registry — both outside the scope.
+func makeRunMemoryFlushFor(req *RunRequest, l *Loop) func(ctx context.Context, state *pipeline.RunState) error {
+	if req.ConnectorPolicy != nil {
+		return func(context.Context, *pipeline.RunState) error { return nil }
+	}
 	return func(ctx context.Context, state *pipeline.RunState) error {
 		settings := ResolveMemoryFlushSettings(l.compactionCfg)
 		if settings == nil {

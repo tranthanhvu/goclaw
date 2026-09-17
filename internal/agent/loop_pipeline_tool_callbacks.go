@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -21,6 +22,13 @@ import (
 func (l *Loop) makeExecuteToolCall(req *RunRequest, bridgeRS *runState) func(ctx context.Context, state *pipeline.RunState, tc providers.ToolCall) ([]providers.Message, error) {
 	emitRun := makeToolEmitRun(l, req)
 	return func(ctx context.Context, state *pipeline.RunState, tc providers.ToolCall) ([]providers.Message, error) {
+		// Connector runs revalidate the live scope after every tool response:
+		// a revoked or remapped scope fails the run instead of continuing.
+		if req.ConnectorPolicy != nil && !req.ConnectorPolicy.DataFree && req.ConnectorPolicy.RevalidateNow != nil {
+			if valid, err := req.ConnectorPolicy.RevalidateNow(ctx); err != nil || !valid {
+				return nil, errors.New("connector scope invalid after tool response (revoked or remapped)")
+			}
+		}
 		tc = l.normalizeToolCall(tc)
 		registryName := l.canonicalToolName(l.resolveToolCallName(tc.Name))
 		argsJSON, _ := json.Marshal(tc.Arguments)

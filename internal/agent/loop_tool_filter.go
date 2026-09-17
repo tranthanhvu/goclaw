@@ -29,6 +29,11 @@ func (l *Loop) buildFilteredTools(req *RunRequest, hadBootstrap bool, iteration,
 		for _, td := range toolDefs {
 			allowedTools[td.Function.Name] = true
 		}
+		if req.ConnectorPolicy != nil {
+			// Marker consumed by authorizeToolCall: this run's allowlist is
+			// exclusive; deferred activation must not admit anything.
+			allowedTools["__connector_run__"] = true
+		}
 	} else {
 		toolDefs = l.tools.ProviderDefs()
 	}

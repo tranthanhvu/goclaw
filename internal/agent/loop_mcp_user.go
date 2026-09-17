@@ -255,6 +255,28 @@ func (l *Loop) executeToolForActor(
 	args map[string]any,
 	channel, chatID, peerKind, sessionKey, actorUserID string,
 ) *tools.Result {
+	// Connector runs resolve only their scoped bridge tools (plus shared
+	// registry tools like the local onboarding tool); actor-keyed credentials
+	// are never consulted.
+	if policy := athconnector.RunPolicyFromContext(ctx); policy != nil {
+		if cached, ok := l.connectorMCPTools.Load(policy.ScopeKey); ok {
+			if entry, ok := cached.(*connectorScopedTools); ok {
+				for _, t := range entry.tools {
+					if t.Name() != name {
+						continue
+					}
+					if ct, ok := t.(tools.ContextualTool); ok {
+						ct.SetContext(channel, chatID)
+					}
+					if pa, ok := t.(tools.PeerKindAware); ok {
+						pa.SetPeerKind(peerKind)
+					}
+					return t.Execute(ctx, args)
+				}
+			}
+		}
+		return l.tools.ExecuteWithContext(ctx, name, args, channel, chatID, peerKind, sessionKey, nil)
+	}
 	if actorUserID != "" {
 		if cached, ok := l.mcpUserTools.Load(actorUserID); ok {
 			for _, t := range cached.([]tools.Tool) {
@@ -339,12 +361,26 @@ func (l *Loop) getConnectorMCPTools(ctx context.Context, policy *athconnector.Ru
 	}
 	l.mcpPool.ReleaseUser(mcpbridge.UserPoolKey(l.tenantID, srv.Name, poolKey))
 	hints := mcpbridge.ParseToolHints(srv.Settings)
+	allow := map[string]bool{}
+	for _, name := range policy.ToolAllow() {
+		allow[name] = true
+	}
 	var scoped []tools.Tool
+	var filteredOut []string
 	for _, mcpTool := range entry.MCPTools() {
+		// The gateway-issued tool list is the whole authorization: bridge
+		// tools outside it never reach the model even if the server exposes them.
+		if !allow[mcpTool.Name] {
+			filteredOut = append(filteredOut, mcpTool.Name)
+			continue
+		}
 		bt := mcpbridge.NewBridgeTool(srv.Name, mcpTool, entry.ClientPtr(), srv.ToolPrefix, srv.TimeoutSec, entry.Connected(), srv.ID, l.mcpGrantChecker).
 			WithHints(hints.Global, hints.HintFor(mcpTool.Name)).
 			WithForceReconnect(entry.RequestForceReconnect())
 		scoped = append(scoped, bt)
+	}
+	if len(filteredOut) > 0 {
+		slog.Info("connector.mcp.tools_filtered", "server", srv.Name, "scope", policy.ScopeKey, "filtered", filteredOut)
 	}
 	l.connectorMCPTools.Store(policy.ScopeKey, &connectorScopedTools{credentialID: cred.CredentialID, tools: scoped})
 	slog.Info("connector.mcp_tools_loaded", "server", srv.Name, "scope", policy.ScopeKey, "tools", len(scoped))

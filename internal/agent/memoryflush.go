@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"github.com/nextlevelbuilder/goclaw/internal/athconnector"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -93,6 +95,13 @@ func buildMemoryFlushPromptConfig(
 // Flush always runs when compaction triggers (called inside maybeSummarize),
 // gated only by enabled/memory checks and a dedup guard per compaction cycle.
 func (l *Loop) shouldRunMemoryFlush(ctx context.Context, sessionKey string, totalTokens int, settings *MemoryFlushSettings) bool {
+	// Connector runs never flush memory: the flush turn would summarize
+	// scoped business history into agent-level memory with the full tool
+	// registry (see also makeRunMemoryFlushFor for the pipeline callback).
+	if athconnector.RunPolicyFromContext(ctx) != nil {
+		return false
+	}
+
 	if settings == nil || !settings.Enabled || !l.hasMemory {
 		return false
 	}

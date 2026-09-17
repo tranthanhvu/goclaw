@@ -2,6 +2,7 @@ package athconnector
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,6 +10,33 @@ import (
 
 	"github.com/google/uuid"
 )
+
+func coordinatorFixtureWithHook(t *testing.T, status string, allowedTools string, hook func(http.ResponseWriter, *http.Request)) (*RunCoordinator, *Origin) {
+	t.Helper()
+	origin, binding := scopeTestOrigin(t)
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if hook != nil {
+			hook(w, r)
+			if w.Header().Get("Content-Type") != "" {
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == PathToken {
+			_, _ = w.Write([]byte(`{"request_id":"r","data":{"credential_id":"` + uuid.New().String() +
+				`","plaintext_credential":"agw1.secret.part.sig","expires_at":"` + time.Now().Add(120*time.Second).Format(time.RFC3339) + `","replayed":false}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"request_id":"r","data":{"context_id":"` + uuid.New().String() +
+			`","request_id":null,"status":"approved","revision":3,"binding_revision":2,"authorization_generation":5,"read_generation":4,"allowed_tools":[` + allowedTools + `]}}`))
+	}
+	client, _ := scopeTestClient(t, handler)
+	coordinator, err := NewRunCoordinator(client, binding, PurposeTenantContract, "Zalo chính")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return coordinator, origin
+}
 
 func coordinatorFixture(t *testing.T, status string, allowedTools string) (*RunCoordinator, *Origin) {
 	t.Helper()
@@ -91,6 +119,40 @@ func TestRunCoordinatorTerminalStatusesDenyWithoutRun(t *testing.T) {
 		if !decision.Policy.DataFree {
 			t.Fatalf("%s policy stays data-free", status)
 		}
+	}
+}
+
+func TestRunCoordinatorBindsPostToolRevalidation(t *testing.T) {
+	revoked := false
+	coordinator, origin := coordinatorFixtureWithHook(t, "approved", `"contract.read_bound"`, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == PathRevalidate {
+			status, valid := "approved", true
+			if revoked {
+				status, valid = "revoked", false
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"request_id":"r","data":{"context_id":"` + uuid.New().String() + `","request_id":null,"status":"` + status + `","revision":3,"binding_revision":2,"authorization_generation":5,"read_generation":4,"allowed_tools":["contract.read_bound"],"valid":` + fmt.Sprint(valid) + `}}`))
+			return
+		}
+	})
+	decision, err := coordinator.Resolve(context.Background(), origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.Policy.RevalidateNow == nil {
+		t.Fatal("approved policy must bind post-tool revalidation")
+	}
+	if valid, err := decision.Policy.RevalidateNow(context.Background()); err != nil || !valid {
+		t.Fatalf("healthy scope must revalidate: valid=%v err=%v", valid, err)
+	}
+	revoked = true
+	if valid, _ := decision.Policy.RevalidateNow(context.Background()); valid {
+		t.Fatal("revocation must invalidate the scope after tool responses")
+	}
+	// Drop clears the cached credential; the next revalidation fails closed.
+	coordinator.Drop(decision.Policy)
+	if _, err := coordinator.Credential(context.Background(), decision.Policy); err != nil {
+		t.Fatal("drop must allow a clean re-issue, not a permanent failure")
 	}
 }
 

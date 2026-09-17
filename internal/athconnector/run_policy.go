@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/nextlevelbuilder/goclaw/internal/i18n"
 )
 
 // OnboardingToolName is the single local tool exposed to connector runs; it
@@ -44,6 +46,10 @@ type RunPolicy struct {
 	// Requester submits onboarding requests for the local tool; the runtime
 	// sets it, the model never can.
 	Requester OnboardingRequester
+	// RevalidateNow re-checks the live scope with the current credential;
+	// the coordinator binds it, the runtime calls it after tool responses
+	// and before delivery.
+	RevalidateNow func(ctx context.Context) (bool, error)
 }
 
 // ToolAllow returns the exclusive tool allow list for the run.
@@ -122,15 +128,31 @@ func (r *RunCoordinator) Resolve(ctx context.Context, origin *Origin) (*Coordina
 	switch scope.Status {
 	case ScopeApproved:
 		decision.Policy.CredentialCache = r.cache
+		decision.Policy.Requester = r.Requester()
+		approved := decision.Policy
+		decision.Policy.RevalidateNow = func(ctx context.Context) (bool, error) {
+			cred, err := r.Credential(ctx, approved)
+			if err != nil {
+				return false, err
+			}
+			return r.Revalidate(ctx, approved, cred.CredentialID)
+		}
 		return decision, nil
 	case ScopeUnlinked, ScopePending:
 		return decision, nil
 	case ScopeRejected, ScopeRevoked, ScopeReapprovalRequire:
 		decision.Denied = true
-		decision.Reply = "Access for this group is not granted. Please contact the admin."
+		decision.Reply = i18n.T(i18n.LocaleVI, i18n.MsgConnectorOnboardingDenied)
 		return decision, nil
 	default:
 		return nil, fmt.Errorf("athconnector: unhandled scope status %q", scope.Status)
+	}
+}
+
+// Drop discards the cached credential for a scope (revocation or remap).
+func (r *RunCoordinator) Drop(policy *RunPolicy) {
+	if policy != nil {
+		r.cache.Drop(policy.ScopeKey)
 	}
 }
 

@@ -251,7 +251,9 @@ func processNormalMessage(
 
 	runID := fmt.Sprintf("inbound-%s-%s-%s", msg.Channel, msg.ChatID, uuid.NewString()[:8])
 
-	if deps.PostConversation != nil {
+	if deps.PostConversation != nil && connectorPolicy == nil {
+		// Connector runs skip post-conversation reports: the delayed report
+		// builds from scoped history and publishes without the delivery guard.
 		deps.PostConversation.Schedule(ctx, deps, postConversationReportEvent{
 			AgentKey:         agentID,
 			Channel:          msg.Channel,
@@ -298,7 +300,7 @@ func processNormalMessage(
 		agentBehavior := channels.ParseAgentDeliveryBehaviorConfig(agentLoop.OtherConfig())
 		chatBehavior = deps.ChannelMgr.ResolveChatBehaviorWithAgent(msg.Channel, workspaceBehavior, agentBehavior)
 	}
-	blockReply := deps.ChannelMgr != nil && chatBehavior.IntermediateReplies.Enabled
+	blockReply := deps.ChannelMgr != nil && chatBehavior.IntermediateReplies.Enabled && connectorPolicy == nil // connector runs never stream interim business content
 	deliveryRuntime := buildDeliveryRuntime(ctx, deps, agentLoop, chatBehavior, msg, userID, peerKind, resolveChannelType(deps.ChannelMgr, msg.Channel), agentID)
 	toolStatus := deps.Cfg.Gateway.ToolStatus == nil || *deps.Cfg.Gateway.ToolStatus // default true
 	if deps.ChannelMgr != nil {
@@ -647,6 +649,7 @@ func processNormalMessage(
 			}
 			if credErr != nil || !valid {
 				slog.Warn("connector: scope invalid before delivery; dropping business content", "run_id", rID, "error", credErr)
+				deps.ConnectorRuns.Drop(policy)
 				deps.MsgBus.PublishOutbound(bus.OutboundMessage{
 					Channel: channel, ChatID: chatID, Content: "",
 					Metadata: meta, TenantID: tenantID, AgentID: agentUUID,
