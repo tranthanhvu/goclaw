@@ -392,3 +392,49 @@ func TestCatalogWorkerStopEndsPollLoop(t *testing.T) {
 	// Second Stop must not panic (sync.Once).
 	worker.Stop()
 }
+
+func TestCatalogWorkerPublishesEmptyGenerationForZeroGroupAccount(t *testing.T) {
+	instanceID := uuid.New()
+	fake := &catalogGatewayFake{now: time.Now()}
+	server := httptest.NewServer(fake.handler(t))
+	defer server.Close()
+
+	_, signerKey, _ := ed25519.GenerateKey(rand.Reader)
+	signer := NewSigner("goclaw-ath", "development", "key-1", signerKey, time.Now)
+	client, err := NewControlClient(connectorTestConfig(server.URL), signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The provider legitimately lists zero joined groups (bot left every group).
+	source := &fakeCatalogSource{}
+	worker, err := NewGroupCatalogWorker(client, AccountBinding{AccountID: uuid.New(), ProviderAccountID: "account-1", AccountEpoch: 1}, source, instanceID, "zalo_personal", "worker-1", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.claimJob = map[string]any{
+		"generation":       7.0,
+		"lease_token":      uuid.New().String(),
+		"lease_expires_at": time.Now().Add(CatalogLeaseSeconds * time.Second).Format(time.RFC3339),
+	}
+
+	if err := worker.RunOnce(context.Background()); err != nil {
+		t.Fatalf("zero-group account must finalize an empty generation: %v", err)
+	}
+	var ops []string
+	for _, op := range fake.operations {
+		ops = append(ops, fmt.Sprint(op["operation"]))
+	}
+	if strings.Join(ops, ",") != "claim,finalize" {
+		t.Fatalf("empty account must go straight from claim to finalize: %s", strings.Join(ops, ","))
+	}
+	finalize := fake.operations[1]
+	if finalize["expected_page_count"].(float64) != 0 {
+		t.Fatalf("empty generation must declare zero pages: %#v", finalize["expected_page_count"])
+	}
+	// Digest must pin the canonical empty jsonb array text.
+	digest, _ := finalize["catalog_digest"].(string)
+	sum := sha256.Sum256([]byte("[]"))
+	if digest != base64.RawURLEncoding.EncodeToString(sum[:]) {
+		t.Fatalf("empty catalog digest must be sha256 of the canonical empty array: %s", digest)
+	}
+}

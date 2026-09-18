@@ -306,7 +306,7 @@ func (c *ControlClient) UploadCatalogPage(ctx context.Context, binding AccountBi
 // FinalizeCatalog commits the complete snapshot after every page is accepted.
 func (c *ControlClient) FinalizeCatalog(ctx context.Context, binding AccountBinding, job CatalogJob, entries []CatalogEntry) (*CatalogFinalizeResult, error) {
 	pageCount := (len(entries) + CatalogMaxEntriesPerPage - 1) / CatalogMaxEntriesPerPage
-	if pageCount < 1 || pageCount > CatalogMaxPages {
+	if pageCount < 0 || pageCount > CatalogMaxPages {
 		return nil, fmt.Errorf("athconnector: catalog page count %d out of range", pageCount)
 	}
 	rawDigest, err := Digest(entries)
@@ -411,14 +411,6 @@ func (w *GroupCatalogWorker) RunOnce(ctx context.Context) error {
 	if err != nil {
 		w.failQuietly(ctx, *job, "entries_invalid", err)
 		return err
-	}
-	if len(entries) == 0 {
-		// A legitimately empty joined-group list cannot be expressed as a
-		// complete snapshot under the current gateway contract (minimum one
-		// page): report the distinct bounded outcome instead of a generic
-		// finalize rejection, and never fabricate empty success.
-		w.failQuietly(ctx, *job, "no_joined_groups", nil)
-		return errors.New("athconnector: account has no joined groups to publish")
 	}
 	if err := w.publish(ctx, *job, entries); err != nil {
 		return err
