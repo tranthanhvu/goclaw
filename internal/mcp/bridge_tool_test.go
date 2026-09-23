@@ -235,10 +235,10 @@ func TestStripEmptyOptionalArgs(t *testing.T) {
 
 	args := map[string]any{
 		"url":      "https://example.com",
-		"api_key":  "optional",    // placeholder → strip
-		"timeout":  nil,           // nil → strip
-		"debug":    true,          // real boolean → keep
-		"keywords": "",            // empty string for string-typed → keep
+		"api_key":  "optional", // placeholder → strip
+		"timeout":  nil,        // nil → strip
+		"debug":    true,       // real boolean → keep
+		"keywords": "",         // empty string for string-typed → keep
 	}
 
 	cleaned := bt.stripEmptyOptionalArgs(args)

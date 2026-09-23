@@ -55,7 +55,7 @@ func TestSubmitApprovalRequestSendsBoundScopeAndBody(t *testing.T) {
 		t.Fatalf("hints not delivered: %#v", gotBody["hints"])
 	}
 	claims := bearerClaims(t, gotAuth)
-	if claims["account_id"] != accountID.String() || claims["conversation_id"] != "group-101" || claims["connector_id"] != client.Config().ConnectorID.String() {
+	if claims["account_id"] != accountID.String() || claims["conversation_id"] != "group-101" || claims["sub"] != client.Config().ConnectorID.String() {
 		t.Fatalf("assertion scope not bound to trusted tuple: %#v", claims)
 	}
 }

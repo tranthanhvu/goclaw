@@ -43,16 +43,18 @@ type assertionHeader struct {
 type assertionClaims struct {
 	Issuer         string `json:"iss"`
 	Audience       string `json:"aud"`
+	Subject        string `json:"sub"`
+	Environment    string `json:"env"`
 	Method         string `json:"method"`
 	Path           string `json:"path"`
 	Action         string `json:"action"`
-	BodyDigest     string `json:"bd"`
-	ConnectorID    string `json:"connector_id"`
+	BodyDigest     string `json:"body_sha256"`
 	AccountID      string `json:"account_id"`
 	AccountEpoch   int    `json:"account_epoch"`
 	PeerKind       string `json:"peer_kind,omitempty"`
 	ConversationID string `json:"conversation_id,omitempty"`
 	IssuedAt       int64  `json:"iat"`
+	NotBefore      int64  `json:"nbf"`
 	ExpiresAt      int64  `json:"exp"`
 	JTI            string `json:"jti"`
 }
@@ -110,16 +112,18 @@ func (s *Signer) Sign(method, path, action string, body []byte, scope AssertionS
 	claims := assertionClaims{
 		Issuer:         s.issuer,
 		Audience:       "ath-connector-control:" + s.environment,
+		Subject:        scope.ConnectorID.String(),
+		Environment:    s.environment,
 		Method:         method,
 		Path:           path,
 		Action:         action,
 		BodyDigest:     base64.RawURLEncoding.EncodeToString(digest[:]),
-		ConnectorID:    scope.ConnectorID.String(),
 		AccountID:      scope.AccountID.String(),
 		AccountEpoch:   scope.AccountEpoch,
 		PeerKind:       scope.PeerKind,
 		ConversationID: scope.ConversationID,
 		IssuedAt:       issued.Unix(),
+		NotBefore:      issued.Unix(),
 		ExpiresAt:      issued.Add(AssertionLifetime).Unix(),
 		JTI:            hex.EncodeToString(nonce),
 	}

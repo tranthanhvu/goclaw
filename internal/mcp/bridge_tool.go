@@ -39,9 +39,9 @@ func argMapKeys(m map[string]any) string {
 // safe reconnection without data races.
 type BridgeTool struct {
 	serverName        string
-	serverID          uuid.UUID    // MCP server ID (for grant recheck)
-	toolName          string       // original MCP tool name
-	registeredName    string       // may include prefix: "{prefix}__{toolName}"
+	serverID          uuid.UUID // MCP server ID (for grant recheck)
+	toolName          string    // original MCP tool name
+	registeredName    string    // may include prefix: "{prefix}__{toolName}"
 	description       string
 	descriptionSuffix string         // admin-authored hints appended to description (see WithHints)
 	inputSchema       map[string]any // JSON Schema for parameters
