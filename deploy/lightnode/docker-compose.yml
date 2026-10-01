@@ -1,0 +1,80 @@
+# goclaw VPS deploy — single-file merge of docker-compose.yml + docker-compose.postgres.yml
+# Hardened for public server: postgres bound to loopback only, dashboard on 18790.
+# Requires .env next to this file (see setup.sh — generates it).
+
+services:
+  goclaw:
+    image: ghcr.io/nextlevelbuilder/goclaw:latest
+    ports:
+      - "${GOCLAW_PORT:-18790}:18790"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - GOCLAW_HOST=0.0.0.0
+      - GOCLAW_PORT=18790
+      - GOCLAW_CONFIG=/app/data/config.json
+      - GOCLAW_GATEWAY_TOKEN=${GOCLAW_GATEWAY_TOKEN:?run setup.sh or set GOCLAW_GATEWAY_TOKEN}
+      - GOCLAW_ENCRYPTION_KEY=${GOCLAW_ENCRYPTION_KEY:-}
+      - GOCLAW_SKILLS_DIR=/app/data/skills
+      - GOCLAW_POSTGRES_DSN=postgres://${POSTGRES_USER:-goclaw}:${POSTGRES_PASSWORD:-goclaw}@postgres:5432/${POSTGRES_DB:-goclaw}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - goclaw-data:/app/data
+      - goclaw-workspace:/app/workspace
+      - goclaw-skills:/app/skills
+      - goclaw-workspace:/app/.goclaw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
+          pids: 200
+    networks:
+      - default
+      - goclaw-net
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg18
+    ports:
+      # Loopback only — never expose postgres on a public VPS.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-goclaw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-goclaw}
+      POSTGRES_DB: ${POSTGRES_DB:-goclaw}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-goclaw} -d ${POSTGRES_DB:-goclaw}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  goclaw-data:
+  goclaw-workspace:
+  goclaw-skills:
+  postgres-data:
+
+networks:
+  goclaw-net:
+    name: goclaw-net
+    driver: bridge

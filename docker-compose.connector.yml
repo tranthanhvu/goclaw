@@ -1,0 +1,43 @@
+# docker-compose.connector.yml — ATH connector-role runtime (local).
+#
+# Use with the base compose so env_file/volumes/security stay aligned:
+#   docker compose -f docker-compose.yml -f docker-compose.connector.yml up -d
+#
+# Differences from the base goclaw service:
+# - runs the worktree build (goclaw-connector:local) which contains the
+#   ATH connector code (internal/athconnector)
+# - GOCLAW_RUNTIME_ROLE=connector arms the ATH restricted intake + local
+#   onboarding tool; the registration itself lives in the mcp_servers
+#   settings entry (mode ath-connector) inside the shared goclaw database
+# - shares the ATH agent-data-gateway network namespace so the ATH control
+#   plane is reachable as loopback HTTP (http://127.0.0.1:3310), the only
+#   plain-HTTP destination GoClaw's connector client accepts
+# - the gateway port 18790 is published by the ATH gateway compose (same
+#   network namespace); this service cannot publish ports itself
+# - the Ed25519 signer key is a read-only mount; never passed via env
+services:
+  goclaw:
+    image: goclaw-connector:local
+    ports: !reset []
+    extra_hosts: !reset []
+    networks: !reset {}
+    network_mode: "container:ath-agent-gateway-local"
+    environment:
+      - GOCLAW_HOST=0.0.0.0
+      - GOCLAW_PORT=18790
+      - GOCLAW_CONFIG=/app/data/config.json
+      - GOCLAW_MCP_ALLOWED_HOSTS=${GOCLAW_MCP_ALLOWED_HOSTS:-}
+      - GOCLAW_GATEWAY_TOKEN=${GOCLAW_GATEWAY_TOKEN:?run ./prepare-env.sh or set GOCLAW_GATEWAY_TOKEN}
+      - GOCLAW_ENCRYPTION_KEY=${GOCLAW_ENCRYPTION_KEY:-}
+      - GOCLAW_SKILLS_DIR=/app/data/skills
+      - GOCLAW_TRACE_VERBOSE=${GOCLAW_TRACE_VERBOSE:-0}
+      - GOCLAW_POSTGRES_DSN=postgres://${POSTGRES_USER:-goclaw}:${POSTGRES_PASSWORD:-goclaw}@postgres:5432/${POSTGRES_DB:-goclaw}?sslmode=disable
+      - BITRIX24_LOG_RAW_EVENT=${BITRIX24_LOG_RAW_EVENT:-0}
+      - BITRIX24_FORCE_REREGISTER=${BITRIX24_FORCE_REREGISTER:-0}
+      - BITRIX24_DEBUG_UNREDACTED_TOKEN=${BITRIX24_DEBUG_UNREDACTED_TOKEN:-0}
+      - GOCLAW_RUNTIME_ROLE=connector
+    volumes:
+      - goclaw-data:/app/data
+      - goclaw-workspace:/app/workspace
+      # Operator trust anchor: Ed25519 signer key, read-only, 0600 on host.
+      - /Users/tranvu/.config/ath-connector/goclaw-signer.key:/secrets/goclaw-signer.key:ro
